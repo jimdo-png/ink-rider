@@ -3477,14 +3477,15 @@ var PLAT0_X1 = 170, PLATF_PAD = 40;
 var STAR_R = 30;
 var AIR_ROT = 7.0;           // rad/s air control (a full flip in ~0.9s of held input)
 var LAND_TOL = 1.15;         // rad mismatch tolerated on landing
-var ZOOM_RIDE = 1.45, ZOOM_DRAW = 1.0;
+var ZOOM_RIDE = 1.9, ZOOM_DRAW = 1.0;   // the ride is watched close; drawing needs the whole level
 var GHOST_HZ = 20;
 
 // ---------------- state ----------------
 var cv, ctx, DPR = Math.min(window.devicePixelRatio || 1, 2);
 var cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
 var essW = 0, essH = 0, rot = false, flipped = false;   // portrait quarter-turn presentation
-var bikeVis = 1;                                        // rider size multiplier for small screens
+var bikeVis = 1, propVis = 1, zoomSketch = 1.4, zoomIdle = 1.2;   // small-screen sizing
+var contentCY = 380, overviewT = 0;                               // level's content band + intro look
 var lastSig = '';                                       // viewport + visible-band signature
 var paused = false, lastTapT = 0, lastCrashT = -9, tapStart = null, seenAir = false, forceW = 0, forceH = 0;
 var cam = { x: W / 2, y: H / 2, zoom: 1 };
@@ -3797,7 +3798,11 @@ function resize(force){
   // The whole level has to stay visible while drawing, which caps how large the world can be
   // rendered — so on a small screen the RIDER is drawn larger instead, targeting a readable
   // on-screen size without ballooning on a desktop monitor.
-  bikeVis = clamp(0.82 / scale, 1, 1.7);
+  // the camera now carries most of the zoom, so these only top the rider up to a readable size
+  bikeVis = clamp(0.68 / scale, 1, 1.35);
+  propVis = clamp(0.62 / scale, 1, 1.25);   // flag and stars: goal markers, no collision fairness cost
+  zoomSketch = clamp(1.05 / scale, 1.2, 2.0);     // how far in we go while a finger is drawing
+  zoomIdle = clamp(0.9 / scale, 1, 1.75);         // resting draw-phase view
   document.body.classList.toggle('portrait', rot);
   document.body.classList.toggle('flip', rot && flipped);
   document.documentElement.style.setProperty('--appw', w + 'px');
@@ -3829,14 +3834,30 @@ function worldPt(e){
   return { x: v.x0 + (p.x - offX) / (scale * cam.zoom), y: v.y0 + (p.y - offY) / (scale * cam.zoom) };
 }
 function updateCamera(dt){
-  var tz = (phase === 'ride' && bike) ? camTargetZoom : ZOOM_DRAW;
-  cam.zoom = lerp(cam.zoom, tz, Math.min(1, dt * 4.5));
-  var tx = W / 2, ty = H / 2;
+  // Idle in the draw phase = whole level in view, for planning the route. The moment a finger is
+  // down we zoom in and track it: at full-level fit on a phone the playfield only fills about a
+  // third of the screen height, which is a lot of dead sky and a very small rider.
+  var tz = ZOOM_DRAW, tx = W / 2, ty = contentCY;
   if (phase === 'ride' && bike) {
+    tz = camTargetZoom;
     tx = bike.x + clamp(bike.vx || 0, -260, 260) * 0.35;
     ty = bike.y - 40;
+  } else if (phase === 'draw') {
+    if (overviewT > 0) {                 // every level opens on the whole route, to plan it
+      overviewT -= dt;
+      tz = ZOOM_DRAW; tx = W / 2; ty = contentCY;
+    } else if (stroking && lastPt) {
+      tz = zoomSketch;
+      tx = lastPt.x + 90 / zoomSketch;   // look ahead of the stroke
+      ty = lastPt.y;
+    } else {
+      tz = zoomIdle;                     // resting view is already zoomed: no dead sky
+      tx = lastPt ? lastPt.x : plats[0].x1 + (W / zoomIdle) * 0.32;
+      ty = lastPt ? lastPt.y : contentCY;
+    }
   }
-  var k = Math.min(1, dt * (phase === 'ride' ? 7 : 4));
+  cam.zoom = lerp(cam.zoom, tz, Math.min(1, dt * 4.5));
+  var k = Math.min(1, dt * (phase === 'ride' ? 7 : 5.5));
   cam.x = lerp(cam.x, tx, k); cam.y = lerp(cam.y, ty, k);
 }
 
@@ -3861,7 +3882,22 @@ function loadLevel(i){
   stars = (L.stars || []).map(function(s){ return { x: s.x, y: s.y, got: false }; });
   var dx = flag.x - PLAT0_X1, dy = flag.y - plats[0].y;
   inkMax = (L.ink || 1.8) * Math.sqrt(dx * dx + dy * dy);
+  // Vertical band this level actually uses, so the camera frames the play area instead of the
+  // empty sky above it. Includes an allowance for the road the player still has to draw.
+  var lo = Math.min(L.startY, L.flagY), hi = Math.max(L.startY, L.flagY);
+  (L.stars || []).forEach(function(s){ lo = Math.min(lo, s.y); hi = Math.max(hi, s.y); });
+  (L.obstacles || []).forEach(function(o){
+    var sw = o.osc ? o.osc.amp : 0;
+    if (o.type === 'lava') { lo = Math.min(lo, o.yTop); hi = Math.max(hi, o.yTop); }
+    else if (o.type === 'wind') { lo = Math.min(lo, o.y0); hi = Math.max(hi, o.y1); }
+    else if (o.type === 'block') { lo = Math.min(lo, o.y - sw); hi = Math.max(hi, o.y + o.h + sw); }
+    else if (o.y !== undefined) { lo = Math.min(lo, o.y - (o.r || 0) - sw); hi = Math.max(hi, o.y + (o.r || 0) + sw); }
+  });
+  lo -= 120; hi += 150;                       // headroom above, drawing room below
+  contentCY = clamp((lo + hi) / 2, 200, H - 200);
+  overviewT = 1.5;                            // open on the full route before easing in
   inkUsed = 0; strokes = []; curStroke = null; penBroken = true; stroking = false; strokeDirty = true; attempts = 0;
+  lastPt = null;                       // also what the resting camera frames — must not carry over
   ghostPlay = save.ghost[li] || null;
   resetBike();
   cam.x = W / 2; cam.y = H / 2; cam.zoom = ZOOM_DRAW;
@@ -4046,8 +4082,14 @@ function bindInput(){
     }
     lastTapT = tnow;
   }
-  cv.addEventListener('pointerup', up);
-  cv.addEventListener('pointercancel', up);
+  // A throw inside the gesture handlers used to leave the HUD stale — the road was drawn but GO
+  // never appeared, which is unrecoverable for the player. Always resync the controls.
+  function safeUp(e){
+    try { up(e); } catch (err) { stroking = false; activePtr = null; curStroke = null; }
+    updateButtons();
+  }
+  cv.addEventListener('pointerup', safeUp);
+  cv.addEventListener('pointercancel', safeUp);
   cv.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 
   bindTap(el.btnGo, startRide);
@@ -4444,8 +4486,9 @@ function render(t, dt){
     for (i = 0; i < obs.length; i++) { o = obs[i];
       if (o.type === 'saw') ART3.drawSaw(ctx, o.x, o.y, o.r, t);
       else if (o.type === 'block') ART3.drawBlock(ctx, o.x, o.y, o.w, o.h, th, t, !!o.osc); }
-    for (i = 0; i < stars.length; i++) ART3.drawStar(ctx, stars[i].x, stars[i].y, t, stars[i].got);
-    ART3.drawFlag(ctx, flag.x, flag.y, t, !!(bike && bike.state === 'win'));
+    for (i = 0; i < stars.length; i++) drawScaled(ART3.drawStar, propVis, stars[i].x, stars[i].y,
+      [stars[i].x, stars[i].y, t, stars[i].got]);
+    drawScaled(ART3.drawFlag, propVis, flag.x, flag.y - 40, [flag.x, flag.y, t, !!(bike && bike.state === 'win')]);
 
     // ghost of your best run
     if (phase === 'ride' && ghostPlay && ghostPlay.length >= 3 && bike.state === 'ride') {
@@ -4485,6 +4528,15 @@ function render(t, dt){
 }
 var bikeProxy = { x:0, y:0, angle:0, speed:0, airborne:false, state:'idle', crashT:0, dist:0, flips:0, lean:0 };
 var camView2 = { x: 0, y: 0, zoom: 1 };
+// draws an art function scaled about a world anchor, so props read larger on a small screen
+// without moving where they actually are
+function drawScaled(fn, k, ax, ay, args){
+  if (k <= 1.01) { fn.apply(ART3, [ctx].concat(args)); return; }
+  ctx.save();
+  ctx.translate(ax, ay); ctx.scale(k, k); ctx.translate(-ax, -ay);
+  fn.apply(ART3, [ctx].concat(args));
+  ctx.restore();
+}
 var skyGrad = null, skyGradTheme = -1;
 function skyFill(themeIdx){
   if (skyGradTheme !== themeIdx || !skyGrad) {
