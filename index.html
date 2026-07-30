@@ -3484,6 +3484,8 @@ var GHOST_HZ = 20;
 var cv, ctx, DPR = Math.min(window.devicePixelRatio || 1, 2);
 var cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
 var essW = 0, essH = 0, rot = false, flipped = false;   // portrait quarter-turn presentation
+var bikeVis = 1;                                        // rider size multiplier for small screens
+var lastSig = '';                                       // viewport + visible-band signature
 var paused = false, lastTapT = 0, lastCrashT = -9, tapStart = null, seenAir = false, forceW = 0, forceH = 0;
 var cam = { x: W / 2, y: H / 2, zoom: 1 };
 var camTargetZoom = ZOOM_DRAW;
@@ -3757,20 +3759,45 @@ function trickPop(msg){
 // the whole scene is drawn rotated a quarter turn and the player simply holds the phone sideways.
 // `essW/essH` are the "effective screen space" the rest of the code lays out in.
 function resize(force){
-  var vv = window.visualViewport;
-  var w = Math.round((vv && vv.width) || window.innerWidth || document.documentElement.clientWidth || 0);
-  var h = Math.round((vv && vv.height) || window.innerHeight || document.documentElement.clientHeight || 0);
+  // Measure the canvas's own laid-out box, not visualViewport. On iOS visualViewport excludes
+  // the Safari toolbars, so sizing to it drew a canvas smaller than the screen, pinned to the
+  // top-left by inset:0 — the game looked shrunken and off-centre. The canvas is fixed at
+  // inset:0, so its client box IS the screen, toolbars included.
+  var de = document.documentElement;
+  var w = Math.round(cv.clientWidth || window.innerWidth || de.clientWidth || 0);
+  var h = Math.round(cv.clientHeight || window.innerHeight || de.clientHeight || 0);
   if (forceW && forceH) { w = forceW; h = forceH; }
   if (!w || !h) { w = 1280; h = 720; }
   var wantRot = (h > w * 1.02) && w < 700;   // phones only: a tablet in portrait is wide enough as-is
-  if (!force && w === cssW && h === cssH && wantRot === rot) return;
+  // the visible band changes on its own when a toolbar slides in or out, with no change to the
+  // canvas box, so it has to be part of the "did anything move?" test
+  var vv0 = window.visualViewport;
+  var sig = w + 'x' + h + ':' + wantRot + ':' +
+    (forceW && forceH ? 'forced' : [Math.round((vv0 && vv0.width) || w), Math.round((vv0 && vv0.height) || h),
+     Math.round((vv0 && vv0.offsetLeft) || 0), Math.round((vv0 && vv0.offsetTop) || 0)].join(','));
+  if (!force && sig === lastSig) return;
+  lastSig = sig;
   cssW = w; cssH = h; rot = wantRot;
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
-  cv.style.width = w + 'px'; cv.style.height = h + 'px';
   essW = rot ? h : w; essH = rot ? w : h;
-  scale = Math.min(essW / W, essH / H);
-  offX = (essW - W * scale) / 2; offY = (essH - H * scale) / 2;
+  // The canvas covers the whole screen so the backdrop paints edge to edge, but the playfield is
+  // centred inside the VISIBLE band — on iOS the browser toolbars overlay the layout viewport, and
+  // centring against the full height pushes the game down behind them.
+  var vv = window.visualViewport;
+  var vx0 = (vv && vv.offsetLeft) || 0, vy0 = (vv && vv.offsetTop) || 0;
+  var vw = Math.min((vv && vv.width) || w, w), vh = Math.min((vv && vv.height) || h, h);
+  if (forceW && forceH) { vx0 = 0; vy0 = 0; vw = w; vh = h; }
+  var visW, visH, visX, visY;
+  if (rot) { visW = vh; visH = vw; visX = vy0; visY = cssW - vx0 - vw; }
+  else { visW = vw; visH = vh; visX = vx0; visY = vy0; }
+  scale = Math.min(visW / W, visH / H);
+  offX = visX + (visW - W * scale) / 2;
+  offY = visY + (visH - H * scale) / 2;
+  // The whole level has to stay visible while drawing, which caps how large the world can be
+  // rendered — so on a small screen the RIDER is drawn larger instead, targeting a readable
+  // on-screen size without ballooning on a desktop monitor.
+  bikeVis = clamp(0.82 / scale, 1, 1.7);
   document.body.classList.toggle('portrait', rot);
   document.body.classList.toggle('flip', rot && flipped);
   document.documentElement.style.setProperty('--appw', w + 'px');
@@ -4437,7 +4464,16 @@ function render(t, dt){
       bikeProxy.x = bike.x; bikeProxy.y = bike.y - 12; bikeProxy.angle = bike.angle; bikeProxy.speed = bike.speed;
       bikeProxy.airborne = bike.airborne; bikeProxy.state = bike.state; bikeProxy.crashT = bike.crashT;
       bikeProxy.dist = bike.dist; bikeProxy.flips = bike.flips; bikeProxy.lean = bike.lean;
-      ART3.drawBike(ctx, bikeProxy, t);
+      if (bikeVis > 1.01) {                       // scale about the rider so it grows in place
+        ctx.save();
+        ctx.translate(bikeProxy.x, bikeProxy.y);
+        ctx.scale(bikeVis, bikeVis);
+        ctx.translate(-bikeProxy.x, -bikeProxy.y);
+        ART3.drawBike(ctx, bikeProxy, t);
+        ctx.restore();
+      } else {
+        ART3.drawBike(ctx, bikeProxy, t);
+      }
     }
     ART3.fxUpdateDraw(ctx, dt);
     if (phase === 'ride' && bike && bike.state === 'ride') {
