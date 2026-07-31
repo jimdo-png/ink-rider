@@ -3414,7 +3414,7 @@
         { type: 'block', x: 1010, y: 300, w: 54, h: 400 }
       ],
       zones: [],
-      stars: [{ x: 420, y: 505 }, { x: 1170, y: 215 }, { x: 560, y: 320 }]
+      stars: [{ x: 420, y: 505 }, { x: 1037, y: 185 }, { x: 560, y: 320 }]
     },
     /* 8 — CRUSH HOUR. New: crusher (oscillating block).
      * Two crushers, w60 h200, top y sweeps 230+-130 = 100..360 => BOTTOM sweeps 300..560.
@@ -3551,7 +3551,7 @@
         { type: 'boost', x: 620, y: 430, angle: 0, power: 780 }
       ],
       zones: [{ x0: 900, x1: 1220 }],
-      stars: [{ x: 420, y: 415 }, { x: 1250, y: 330 }, { x: 880, y: 270 }]
+      stars: [{ x: 420, y: 415 }, { x: 1250, y: 330 }, { x: 1055, y: 415 }]
     },
 
     /* 13 — MEAT GRINDER. New: crusher gauntlet over a lava floor (no bail-out below).
@@ -3618,7 +3618,7 @@
         { type: 'block', x: 1120, y: 270, w: 56, h: 430 }
       ],
       zones: [],
-      stars: [{ x: 350, y: 600 }, { x: 740, y: 370 }, { x: 1300, y: 140 }]
+      stars: [{ x: 350, y: 600 }, { x: 740, y: 370 }, { x: 1148, y: 195 }]
     },
     /* 15 — SLALOM RIDGE. New: alternating high/low saws you must weave, lava underneath.
      * Static high saws (560,350) and (960,350) r32 => you pass UNDER: bike centre must be
@@ -3684,7 +3684,7 @@
         { type: 'lava', x0: 940, x1: 1120, yTop: 700 }
       ],
       zones: [],
-      stars: [{ x: 300, y: 545 }, { x: 1100, y: 290 }, { x: 450, y: 380 }]
+      stars: [{ x: 300, y: 545 }, { x: 1028, y: 265 }, { x: 450, y: 380 }]
     },
 
     /* 17 — INK CHAIN. New: a three-gap rhythm chain on minimum runways.
@@ -3745,7 +3745,7 @@
         { type: 'lava', x0: 900, x1: 1200, yTop: 700 }
       ],
       zones: [],
-      stars: [{ x: 420, y: 560 }, { x: 1130, y: 200 }, { x: 900, y: 150 }]
+      stars: [{ x: 420, y: 560 }, { x: 1130, y: 200 }, { x: 1038, y: 145 }]
     },
 
     /* 19 — EVERYTHING. New: nothing new — every mechanic in one run, in sequence.
@@ -3828,7 +3828,7 @@
         { type: 'lava', x0: 1060, x1: 1360, yTop: 690 }
       ],
       zones: [{ x0: 520, x1: 700 }],
-      stars: [{ x: 250, y: 330 }, { x: 860, y: 350 }, { x: 720, y: 255 }]
+      stars: [{ x: 250, y: 330 }, { x: 860, y: 350 }, { x: 640, y: 310 }]
     }
   ];
 
@@ -3989,7 +3989,7 @@ L.push({ name: 'Spire Vault', country: 'Czechia', flagColors: ['#d7141a','#11457
   obstacles: [ { type: 'spring', x: 640, y: 560, power: 900 },
                { type: 'block', x: 850, y: 330, w: 60, h: 370 } ],
   zones: [],
-  stars: [ { x: 500, y: 540 }, { x: 880, y: 260 }, { x: 1230, y: 480 } ] });
+  stars: [ { x: 500, y: 540 }, { x: 880, y: 235 }, { x: 1230, y: 480 } ] });
 
 /* 31 Turkey — crosswind strait: 150px void inside a -260 headwind box; launch ≥600 clears. */
 L.push({ name: 'Bosphorus', country: 'Turkey', flagColors: ['#e30a17','#ffffff'],
@@ -4018,7 +4018,7 @@ L.push({ name: 'Tower Hop', country: 'UAE', flagColors: ['#00732f','#ff0000'],
                { type: 'spring', x: 940, y: 345, power: 800 },
                { type: 'block', x: 1120, y: 300, w: 60, h: 400 } ],
   zones: [],
-  stars: [ { x: 430, y: 600 }, { x: 760, y: 380 }, { x: 1300, y: 240 } ] });
+  stars: [ { x: 430, y: 600 }, { x: 760, y: 380 }, { x: 1150, y: 215 } ] });
 
 /* 34 Thailand — temple garden: lava pool bridged at ~0.55H under a slow x-swinging blade. */
 L.push({ name: 'Wat Steps', country: 'Thailand', flagColors: ['#a51931','#2d2a4a'],
@@ -4546,6 +4546,7 @@ var PLAT0_X1 = 170, PLATF_PAD = 40;
 var STAR_R = 30;
 var AIR_ROT = 7.0;           // rad/s air control (a full flip in ~0.9s of held input)
 var LAND_SNAP = 26;          // how far below a surface still counts as touching down on it
+var SPRING_ZONE = 130;       // the live column above a spring coil: cross it anywhere and it fires
 var WHEELBASE = 30;          // front/rear contact spread the chassis pitches across
 var SUSP_K = 220, SUSP_C = 13;   // suspension spring and damping
 var BRIDGE_GAP = 90;         // start/finish gap auto-closed at launch (drawing from the exact lip is fiddly)
@@ -4898,7 +4899,10 @@ function resize(force){
   var visW, visH, visX, visY;
   if (rot) { visW = vh; visH = vw; visX = vy0; visY = cssW - vx0 - vw; }
   else { visW = vw; visH = vh; visX = vx0; visY = vy0; }
-  scale = Math.min(visW / W, visH / H);
+  // On phones the world is fitted with side margins so the start ledge never hides behind the
+  // notch / Dynamic Island or the HUD columns — the bike must be visible the moment a level opens.
+  var mx = (Math.min(w, h) < 500) ? 56 : 0;
+  scale = Math.min((visW - mx * 2) / W, visH / H);
   offX = visX + (visW - W * scale) / 2;
   offY = visY + (visH - H * scale) / 2;
   // The whole level has to stay visible while drawing, which caps how large the world can be
@@ -5627,7 +5631,10 @@ function padsAt(x, y, grounded){
     var o = obs[i];
     // triggers match the bigger V5 pad art — generous is friendly
     if (o.type === 'boost' && grounded && Math.abs(x - o.x) < 44 && Math.abs(y - o.y) < 38) return o;
-    if (o.type === 'spring' && Math.abs(x - o.x) < 40 && y > o.y - 48 && y < o.y + 30) return o;
+    // The spring's whole pulsing column is live: cross anywhere within ~130px above the coil —
+    // riding over it, cresting past it, even flying through it — and it throws you. Previously it
+    // only fired grounded or falling, so a bump that lifted you just before the coil skipped it.
+    if (o.type === 'spring' && Math.abs(x - o.x) < 42 && y > o.y - SPRING_ZONE && y < o.y + 30) return o;
   }
   return null;
 }
@@ -5727,8 +5734,10 @@ function physStep(dt){
     // deep dip is never mistaken for a death, and the camera then follows the plummet down.
     if (b.y > H + 12) { fail('fall'); return; }
     var pad2 = padsAt(b.x, b.y, false);
-    if (pad2 && pad2.type === 'spring' && pad2.fired <= 0 && b.vy > 0) {
+    if (pad2 && pad2.type === 'spring' && pad2.fired <= 0) {
+      // fires on ANY airborne pass through the column — rising off a crest included
       b.vy = -pad2.power; pad2.fired = 1; AUDIO3.spring(); ART3.fxSpring(pad2.x, pad2.y); ART3.shake(6);
+      buzz(25);
     }
     var g = groundY(b.x);
     if (g === g && b.y >= g) {
@@ -5850,7 +5859,10 @@ function render(t, dt){
     if (phase === 'draw' && !el.onboard.hidden) ghostRoute(t);
     for (i = 0; i < obs.length; i++) { o = obs[i];
       if (o.type === 'boost') drawScaled(ART3.drawBoost, padVis, o.x, o.y, [o.x, o.y, o.angle, t]);
-      else if (o.type === 'spring') drawScaled(ART3.drawSpring, padVis, o.x, o.y, [o.x, o.y, t, o.fired || 0]); }
+      else if (o.type === 'spring') {
+        if (!o.fired) springBeam(o.x, o.y, t);
+        drawScaled(ART3.drawSpring, padVis, o.x, o.y, [o.x, o.y, t, o.fired || 0]);
+      } }
     for (i = 0; i < obs.length; i++) { o = obs[i];
       if (o.type === 'saw') ART3.drawSaw(ctx, o.x, o.y, o.r, t);
       else if (o.type === 'block') ART3.drawBlock(ctx, o.x, o.y, o.w, o.h, th, t, !!o.osc); }
@@ -5933,6 +5945,32 @@ function inkFloor(){
   ctx.strokeStyle = 'rgba(238,252,255,0.95)'; ctx.lineWidth = core; ctx.stroke();
   ctx.restore();
 }
+// The spring's live column, drawn as a pulsing golden beam with rising chevrons — cross it
+// ANYWHERE and the spring fires. Makes "where do I go to use this?" self-answering.
+function springBeam(x, y, t){
+  var topY = y - SPRING_ZONE;
+  var pulse = 0.5 + 0.5 * Math.sin(t * 3.2);
+  ctx.save();
+  var grad = ctx.createLinearGradient(0, topY, 0, y);
+  grad.addColorStop(0, 'rgba(255,211,77,0)');
+  grad.addColorStop(0.55, 'rgba(255,211,77,' + (0.05 + pulse * 0.05).toFixed(3) + ')');
+  grad.addColorStop(1, 'rgba(255,211,77,' + (0.13 + pulse * 0.08).toFixed(3) + ')');
+  ctx.fillStyle = grad;
+  ctx.fillRect(x - 40, topY, 80, SPRING_ZONE);
+  // rising chevrons inside the column
+  ctx.strokeStyle = 'rgba(255,224,120,' + (0.35 + pulse * 0.3).toFixed(3) + ')';
+  ctx.lineWidth = 5; ctx.lineCap = 'round';
+  for (var k = 0; k < 3; k++) {
+    var ph = ((t * 0.9 + k / 3) % 1);
+    var cy = y - 18 - ph * (SPRING_ZONE - 44);
+    ctx.globalAlpha = 1 - ph * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(x - 16, cy + 10); ctx.lineTo(x, cy - 4); ctx.lineTo(x + 16, cy + 10);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 // dusk-black wash + edge shading over the background so the neon play layer pops (cached per theme+size)
 var bgDimC = null, bgDimKey = '';
 function bgDim(){
