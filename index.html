@@ -3414,7 +3414,7 @@
         { type: 'block', x: 1010, y: 300, w: 54, h: 400 }
       ],
       zones: [],
-      stars: [{ x: 420, y: 505 }, { x: 1037, y: 185 }, { x: 560, y: 320 }]
+      stars: [{ x: 300, y: 500 }, { x: 1022, y: 155 }, { x: 560, y: 320 }]
     },
     /* 8 — CRUSH HOUR. New: crusher (oscillating block).
      * Two crushers, w60 h200, top y sweeps 230+-130 = 100..360 => BOTTOM sweeps 300..560.
@@ -3551,7 +3551,7 @@
         { type: 'boost', x: 620, y: 430, angle: 0, power: 780 }
       ],
       zones: [{ x0: 900, x1: 1220 }],
-      stars: [{ x: 420, y: 415 }, { x: 1250, y: 330 }, { x: 1055, y: 415 }]
+      stars: [{ x: 420, y: 415 }, { x: 1305, y: 520 }, { x: 1045, y: 445 }]
     },
 
     /* 13 — MEAT GRINDER. New: crusher gauntlet over a lava floor (no bail-out below).
@@ -3745,7 +3745,7 @@
         { type: 'lava', x0: 900, x1: 1200, yTop: 700 }
       ],
       zones: [],
-      stars: [{ x: 420, y: 560 }, { x: 1130, y: 200 }, { x: 1038, y: 145 }]
+      stars: [{ x: 420, y: 560 }, { x: 1130, y: 315 }, { x: 1038, y: 145 }]
     },
 
     /* 19 — EVERYTHING. New: nothing new — every mechanic in one run, in sequence.
@@ -3989,7 +3989,7 @@ L.push({ name: 'Spire Vault', country: 'Czechia', flagColors: ['#d7141a','#11457
   obstacles: [ { type: 'spring', x: 640, y: 560, power: 900 },
                { type: 'block', x: 850, y: 330, w: 60, h: 370 } ],
   zones: [],
-  stars: [ { x: 500, y: 540 }, { x: 880, y: 235 }, { x: 1230, y: 480 } ] });
+  stars: [ { x: 500, y: 540 }, { x: 880, y: 270 }, { x: 1450, y: 505 } ] });
 
 /* 31 Turkey — crosswind strait: 150px void inside a -260 headwind box; launch ≥600 clears. */
 L.push({ name: 'Bosphorus', country: 'Turkey', flagColors: ['#e30a17','#ffffff'],
@@ -4018,7 +4018,7 @@ L.push({ name: 'Tower Hop', country: 'UAE', flagColors: ['#00732f','#ff0000'],
                { type: 'spring', x: 940, y: 345, power: 800 },
                { type: 'block', x: 1120, y: 300, w: 60, h: 400 } ],
   zones: [],
-  stars: [ { x: 430, y: 600 }, { x: 760, y: 380 }, { x: 1150, y: 215 } ] });
+  stars: [ { x: 430, y: 600 }, { x: 895, y: 325 }, { x: 1050, y: 185 } ] });
 
 /* 34 Thailand — temple garden: lava pool bridged at ~0.55H under a slow x-swinging blade. */
 L.push({ name: 'Wat Steps', country: 'Thailand', flagColors: ['#a51931','#2d2a4a'],
@@ -4178,11 +4178,7 @@ L.push({ name: 'Malecón', country: 'Cuba', flagColors: ['#002a8f','#cf142b'],
   stars: [ { x: 625, y: 300 }, { x: 1010, y: 560 }, { x: 1400, y: 430 } ] });
 
 /* extra bite for the quip pools */
-window.QUIPS3.crash.push('Passport revoked.', 'Customs said no.');
-window.QUIPS3.fall.push('Long-haul flight.', 'Gone walkabout.');
 window.QUIPS3.close.push('Metres from glory.');
-window.QUIPS3.win.push('Stamped in.', 'World tour!');
-window.QUIPS3.trick.push('Frequent flyer!', 'Jet lagged.');
 window.QUIPS3.steep.push('Peak too proud.');
 
 })();
@@ -4543,7 +4539,7 @@ var DRAG = ENGINE / VMAX;
 var SUB = 5;                 // physics substeps
 var STEP_HOP = 52;           // max ledge the bike can hop up
 var PLAT0_X1 = 170, PLATF_PAD = 40;
-var STAR_R = 30;
+var STAR_R = 38;
 var AIR_ROT = 7.0;           // rad/s air control (a full flip in ~0.9s of held input)
 var LAND_SNAP = 26;          // how far below a surface still counts as touching down on it
 var SPRING_ZONE = 130;       // the live column above a spring coil: cross it anywhere and it fires
