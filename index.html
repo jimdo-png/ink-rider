@@ -3484,8 +3484,12 @@ var GHOST_HZ = 20;
 var cv, ctx, DPR = Math.min(window.devicePixelRatio || 1, 2);
 var cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
 var essW = 0, essH = 0, rot = false, flipped = false;   // portrait quarter-turn presentation
-var bikeVis = 1, propVis = 1, zoomSketch = 1.4, zoomIdle = 1.2;   // small-screen sizing
-var contentCY = 380, overviewT = 0;                               // level's content band + intro look
+var bikeVis = 1, propVis = 1;                                     // small-screen sizing
+var contentCY = 380;                                              // level's content band
+// player-controlled camera (draw phase): 1 = whole level in view, up to ZOOM_MAX zoomed in
+var ZOOM_MAX = 3.2;
+var userZoom = 1, userCamX = W / 2, userCamY = 380;
+var ptrs = {}, ptrCount = 0, gesture = null;                      // multi-touch pinch/pan state
 var lastSig = '';                                       // viewport + visible-band signature
 var paused = false, lastTapT = 0, lastCrashT = -9, tapStart = null, seenAir = false, forceW = 0, forceH = 0;
 var cam = { x: W / 2, y: H / 2, zoom: 1 };
@@ -3586,7 +3590,7 @@ if (!window.ART3) {
 // Everything read back out is coerced and clamped here so nothing downstream can be fed a
 // hostile type — star counts drive string repeats, medals drive CSS class names.
 function loadSave(){
-  var out = { unlocked: 0, stars: {}, medals: {}, best: {}, score: {}, ghost: {}, mute: false,
+  var out = { unlocked: 0, stars: {}, medals: {}, best: {}, score: {}, ghost: {}, mute: true,
               onboarded: 0, coached: 0, tipSeen: 0, flipped: false };
   var raw;
   try { raw = JSON.parse(localStorage.getItem('inkrider3')); } catch(e){ return out; }
@@ -3627,7 +3631,9 @@ function loadSave(){
       if (ok && clean.length >= 3) out.ghost[gi] = clean;
     }
   }
-  out.mute = !!raw.mute; out.flipped = !!raw.flipped;
+  // sound is OFF until the player turns it on; only an explicit unmute is remembered
+  out.mute = (raw.mute === false) ? false : true;
+  out.flipped = !!raw.flipped;
   out.onboarded = raw.onboarded ? 1 : 0; out.coached = raw.coached ? 1 : 0; out.tipSeen = raw.tipSeen ? 1 : 0;
   return out;
 }
@@ -3649,6 +3655,7 @@ function buildDOM(){
      '<div id="toast"></div><div id="trickpop"></div>' +
      '<div id="keys">SPACE go · Z undo · C clear · R retry · ←→ lean</div>' +
      '<button id="btnUndo">↶</button><button id="btnClear">↺</button><button id="btnGo">GO</button><button id="btnRetry">RETRY</button>' +
+     '<div id="zoombar"><button id="btnZoomIn">+</button><button id="btnZoomOut">−</button><button id="btnFit">⤢</button></div>' +
      '<div id="hint"></div>' +
      '<div id="leanL" class="leanpad"></div><div id="leanR" class="leanpad"></div>' +
      '<div id="coach">hold either side to spin</div>' +
@@ -3721,10 +3728,20 @@ function buildDOM(){
     '#btnClear{margin-left:14px}' +
     'body.touch #btnMenu,body.touch #btnMute,body.touch #fsBtn,body.touch #flipBtn{min-width:48px;min-height:48px}' +
     '#onboard,#coach,#rotate,#trickpop,#toast{pointer-events:none!important}' +
-    '#installTip{pointer-events:auto}';
+    '#installTip{pointer-events:auto}' +
+    // zoom controls: one-handed alternative to pinch, mid-right edge, clear of the thumb arcs
+    '#zoombar{position:absolute;right:max(var(--sr),12px);top:50%;transform:translateY(-50%);' +
+      'display:flex;flex-direction:column;gap:8px;z-index:7;pointer-events:none}' +
+    '#zoombar button{pointer-events:auto;width:48px;height:48px;min-width:48px;min-height:48px;' +
+      'border-radius:14px;border:1px solid rgba(122,230,255,.22);background:rgba(10,10,26,.62);' +
+      'color:#dff1ff;font:700 20px/1 system-ui;display:flex;align-items:center;justify-content:center}' +
+    '#zoombar button:disabled{opacity:.32}' +
+    '#btnMute.off{opacity:.55}' +
+    '@media (max-height:360px){#zoombar button{width:42px;height:42px;min-width:42px;min-height:42px}}';
   document.head.appendChild(ost);
   ['cv','hud','topbar','btnMenu','lvlname','inkwrap','inkbar','inkfill','inklabel','timer','starrow','btnMute','toast','trickpop',
-   'keys','btnUndo','btnClear','btnGo','btnRetry','hint','leanL','leanR','coach','onboard','title','logo','v2tag','tag','btnPlay','totstars',
+   'keys','btnUndo','btnClear','btnGo','btnRetry','zoombar','btnZoomIn','btnZoomOut','btnFit',
+   'hint','leanL','leanR','coach','onboard','title','logo','v2tag','tag','btnPlay','totstars',
    'installTip','select','grid','selfoot','btnBack','winCard','winMedal','winStars','winName','winRows','btnNext','btnReplay','btnLevels',
    'rotate','fsBtn','flipBtn']
    .forEach(function(id){ el[id] = document.getElementById(id); });
@@ -3801,8 +3818,7 @@ function resize(force){
   // the camera now carries most of the zoom, so these only top the rider up to a readable size
   bikeVis = clamp(0.68 / scale, 1, 1.35);
   propVis = clamp(0.62 / scale, 1, 1.25);   // flag and stars: goal markers, no collision fairness cost
-  zoomSketch = clamp(1.05 / scale, 1.2, 2.0);     // how far in we go while a finger is drawing
-  zoomIdle = clamp(0.9 / scale, 1, 1.75);         // resting draw-phase view
+  clampUserCam();                                 // a resize can change what the camera may show
   document.body.classList.toggle('portrait', rot);
   document.body.classList.toggle('flip', rot && flipped);
   document.documentElement.style.setProperty('--appw', w + 'px');
@@ -3833,32 +3849,45 @@ function worldPt(e){
   var v = camView(), p = toEss(e.clientX, e.clientY);
   return { x: v.x0 + (p.x - offX) / (scale * cam.zoom), y: v.y0 + (p.y - offY) / (scale * cam.zoom) };
 }
+// keeps the player's camera inside the world at whatever zoom they've chosen
+function clampUserCam(){
+  userZoom = clamp(userZoom, 1, ZOOM_MAX);
+  var vw = W / userZoom, vh = H / userZoom;
+  userCamX = clamp(userCamX, vw / 2, W - vw / 2);
+  userCamY = clamp(userCamY, vh / 2, H - vh / 2);
+}
+function setZoom(z, anchorWorld){
+  var prev = userZoom;
+  userZoom = clamp(z, 1, ZOOM_MAX);
+  if (anchorWorld && prev > 0) {          // keep the pinch/tap point under the fingers
+    var f = 1 - prev / userZoom;
+    userCamX += (anchorWorld.x - userCamX) * f;
+    userCamY += (anchorWorld.y - userCamY) * f;
+  }
+  clampUserCam();
+}
+function zoomFit(){ userZoom = 1; userCamX = W / 2; userCamY = contentCY; clampUserCam(); }
+
 function updateCamera(dt){
   // Idle in the draw phase = whole level in view, for planning the route. The moment a finger is
   // down we zoom in and track it: at full-level fit on a phone the playfield only fills about a
   // third of the screen height, which is a lot of dead sky and a very small rider.
-  var tz = ZOOM_DRAW, tx = W / 2, ty = contentCY;
+  // DRAW phase: the player owns the camera. It opens showing the whole level (you cannot plan a
+  // route you cannot see) and only moves when they pinch, drag with two fingers, or use the zoom
+  // buttons. Nothing auto-zooms under their hands. RIDE phase: the camera follows the bike.
   if (phase === 'ride' && bike) {
-    tz = camTargetZoom;
-    tx = bike.x + clamp(bike.vx || 0, -260, 260) * 0.35;
-    ty = bike.y - 40;
-  } else if (phase === 'draw') {
-    if (overviewT > 0) {                 // every level opens on the whole route, to plan it
-      overviewT -= dt;
-      tz = ZOOM_DRAW; tx = W / 2; ty = contentCY;
-    } else if (stroking && lastPt) {
-      tz = zoomSketch;
-      tx = lastPt.x + 90 / zoomSketch;   // look ahead of the stroke
-      ty = lastPt.y;
-    } else {
-      tz = zoomIdle;                     // resting view is already zoomed: no dead sky
-      tx = lastPt ? lastPt.x : plats[0].x1 + (W / zoomIdle) * 0.32;
-      ty = lastPt ? lastPt.y : contentCY;
-    }
+    var tz = Math.max(camTargetZoom, userZoom);
+    var tx = bike.x + clamp(bike.vx || 0, -260, 260) * 0.35;
+    var ty = bike.y - 40;
+    cam.zoom = lerp(cam.zoom, tz, Math.min(1, dt * 4.5));
+    var k = Math.min(1, dt * 7);
+    cam.x = lerp(cam.x, tx, k); cam.y = lerp(cam.y, ty, k);
+  } else {
+    cam.zoom = lerp(cam.zoom, userZoom, Math.min(1, dt * 9));
+    cam.x = lerp(cam.x, userCamX, Math.min(1, dt * 9));
+    cam.y = lerp(cam.y, userCamY, Math.min(1, dt * 9));
   }
-  cam.zoom = lerp(cam.zoom, tz, Math.min(1, dt * 4.5));
-  var k = Math.min(1, dt * (phase === 'ride' ? 7 : 5.5));
-  cam.x = lerp(cam.x, tx, k); cam.y = lerp(cam.y, ty, k);
+  clampUserCam();
 }
 
 // ---------------- level lifecycle ----------------
@@ -3895,7 +3924,8 @@ function loadLevel(i){
   });
   lo -= 120; hi += 150;                       // headroom above, drawing room below
   contentCY = clamp((lo + hi) / 2, 200, H - 200);
-  overviewT = 1.5;                            // open on the full route before easing in
+  zoomFit();                                  // every level opens showing the whole route
+  cam.zoom = userZoom; cam.x = userCamX; cam.y = userCamY;
   inkUsed = 0; strokes = []; curStroke = null; penBroken = true; stroking = false; strokeDirty = true; attempts = 0;
   lastPt = null;                       // also what the resting camera frames — must not carry over
   ghostPlay = save.ghost[li] || null;
@@ -3909,7 +3939,7 @@ function loadLevel(i){
   el.coach.classList.remove('show');
   seenAir = false;
   el.timer.textContent = '0.0s';
-  AUDIO3.musicStart(L.theme | 0);
+  if (!AUDIO3.muted) AUDIO3.musicStart(L.theme | 0);
   updateStarRow(); updateInkbar(); updateButtons(); showScreen(null);
 }
 
@@ -3931,6 +3961,10 @@ function updateButtons(){
   el.btnUndo.hidden = !(drawable && strokes.length > 0);
   el.btnRetry.hidden = !(phase === 'ride' && bike && bike.state === 'ride');
   el.hud.hidden = !(phase === 'draw' || phase === 'ride');
+  el.zoombar.hidden = !(phase === 'draw');
+  el.btnZoomIn.disabled = userZoom >= ZOOM_MAX - 0.01;
+  el.btnZoomOut.disabled = userZoom <= 1.01;
+  el.btnFit.disabled = userZoom <= 1.01;
   var riding = phase === 'ride' && bike && bike.state === 'ride';
   el.leanL.hidden = el.leanR.hidden = !(isTouch && riding);
   el.keys.hidden = isTouch || riding;                 // the hint strip sits where RETRY lands
@@ -4031,8 +4065,47 @@ function clearStroke(){
 
 // ---------------- input ----------------
 function bindInput(){
+  // ---- two-finger pinch + pan (draw phase). One finger draws; a second finger takes over as a
+  // camera gesture and cancels the stroke in progress so you never get a stray line from it.
+  function ptrMid(){
+    var xs = 0, ys2 = 0, n = 0, a = null, b = null;
+    for (var k in ptrs) { var p = ptrs[k]; xs += p.x; ys2 += p.y; n++; if (!a) a = p; else if (!b) b = p; }
+    if (!n) return null;
+    var d = (a && b) ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    return { x: xs / n, y: ys2 / n, dist: d };
+  }
+  function screenToWorld(sx, sy){
+    var v = camView(), p = toEss(sx, sy);
+    return { x: v.x0 + (p.x - offX) / (scale * cam.zoom), y: v.y0 + (p.y - offY) / (scale * cam.zoom) };
+  }
+  function beginGesture(){
+    if (stroking) {                       // undo the partial stroke the first finger started
+      stroking = false; AUDIO3.scratch(false);
+      if (curStroke && curStroke.cells.length) { strokes.push(curStroke); curStroke = null; undoStroke(); }
+      curStroke = null; activePtr = null;
+    }
+    var m = ptrMid();
+    gesture = m ? { dist: m.dist, mid: m, camX: userCamX, camY: userCamY, zoom: userZoom } : null;
+    updateButtons();
+  }
+  function moveGesture(){
+    if (!gesture) return;
+    var m = ptrMid();
+    if (!m) return;
+    if (gesture.dist > 20 && m.dist > 20) setZoom(gesture.zoom * (m.dist / gesture.dist), null);
+    // pan by the movement of the two-finger midpoint, in world units at the current zoom
+    var k = 1 / (scale * userZoom);
+    var dx = (m.x - gesture.mid.x) * k, dy = (m.y - gesture.mid.y) * k;
+    if (rot) { var t2 = dx; dx = dy; dy = -t2; }     // the view is a quarter turn round
+    if (rot && flipped) { dx = -dx; dy = -dy; }
+    userCamX = gesture.camX - dx; userCamY = gesture.camY - dy;
+    clampUserCam();
+  }
+
   cv.addEventListener('pointerdown', function(e){
     AUDIO3.unlock();
+    ptrs[e.pointerId] = { x: e.clientX, y: e.clientY }; ptrCount++;
+    if (ptrCount >= 2 && phase === 'draw') { beginGesture(); return; }
     if (paused) { paused = false; prevT = nowS(); toast('', 1); return; }
     // a tap during the crash replay cuts it short: crash -> drawing again is one tap, no waiting
     if (phase === 'ride' && bike && bike.state === 'crash') { crashTimer = 0; return; }
@@ -4051,6 +4124,8 @@ function bindInput(){
     strokeTo(worldPt(e)); AUDIO3.scratch(true); updateButtons();
   });
   cv.addEventListener('pointermove', function(e){
+    if (ptrs[e.pointerId]) { ptrs[e.pointerId].x = e.clientX; ptrs[e.pointerId].y = e.clientY; }
+    if (gesture) { e.preventDefault(); moveGesture(); return; }
     if (phase !== 'draw' || !stroking || e.pointerId !== activePtr) return;
     e.preventDefault();
     var evs = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
@@ -4058,6 +4133,8 @@ function bindInput(){
     for (var i = 0; i < evs.length; i++) strokeTo(worldPt(evs[i]));
   });
   function up(e){
+    if (ptrs[e.pointerId]) { delete ptrs[e.pointerId]; ptrCount = Math.max(0, ptrCount - 1); }
+    if (gesture) { if (ptrCount < 2) { gesture = null; tapStart = null; } else { gesture = null; beginGesture(); } return; }
     if (phase === 'ride') { leanInput = 0; return; }
     if (e.pointerId !== activePtr) return;
     activePtr = null;
@@ -4096,7 +4173,10 @@ function bindInput(){
   bindTap(el.btnClear, clearStroke);
   bindTap(el.btnUndo, undoStroke);
   bindTap(el.btnRetry, abortRide);
-  bindTap(el.btnMute, function(){ var m = AUDIO3.toggleMute(); save.mute = m; persist(); el.btnMute.textContent = m ? '✕' : '♪'; });
+  bindTap(el.btnMute, function(){ var m = AUDIO3.toggleMute(); save.mute = m; persist();
+      el.btnMute.textContent = m ? '♪̸' : '♪'; el.btnMute.classList.toggle('off', m);
+      if (!m && L) AUDIO3.musicStart(L.theme | 0); else AUDIO3.musicStop();
+      toast(m ? 'sound off' : 'sound on', 900);});
   bindTap(el.btnMenu, openSelect);
   bindTap(el.btnPlay, openSelect);
   bindTap(el.btnBack, showTitle);
@@ -4111,6 +4191,14 @@ function bindInput(){
     node.addEventListener('pointerleave', function(){ leanInput = 0; });
   }
   leanBind(el.leanL, -1); leanBind(el.leanR, 1);
+  bindTap(el.btnZoomIn, function(){ setZoom(userZoom * 1.4, { x: userCamX, y: userCamY }); });
+  bindTap(el.btnZoomOut, function(){ setZoom(userZoom / 1.4, { x: userCamX, y: userCamY }); });
+  bindTap(el.btnFit, zoomFit);
+  cv.addEventListener('wheel', function(e){          // desktop: wheel/trackpad zoom at the cursor
+    if (phase !== 'draw') return;
+    e.preventDefault();
+    setZoom(userZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), screenToWorld(e.clientX, e.clientY));
+  }, { passive: false });
   bindTap(el.fsBtn, toggleFullscreen);
   bindTap(el.flipBtn, function(){ flipped = !flipped; save.flipped = flipped; persist(); resize(true); });
   bindTap(el.installTip, function(){ el.installTip.classList.remove('show'); save.tipSeen = 1; persist(); });
@@ -4128,7 +4216,10 @@ function bindInput(){
     if (k === 'z' || k === 'Z') { if (phase === 'draw' && !stroking) { AUDIO3.click(); undoStroke(); } return; }
     if (k === 'c' || k === 'C') { if (phase === 'draw' && !stroking) { AUDIO3.click(); clearStroke(); } return; }
     if (k === 'r' || k === 'R') { AUDIO3.click(); if (phase === 'ride') abortRide(); else if (phase === 'win') loadLevel(li); return; }
-    if (k === 'm' || k === 'M') { var m = AUDIO3.toggleMute(); save.mute = m; persist(); el.btnMute.textContent = m ? '✕' : '♪'; return; }
+    if (k === 'm' || k === 'M') { var m = AUDIO3.toggleMute(); save.mute = m; persist();
+      el.btnMute.textContent = m ? '♪̸' : '♪'; el.btnMute.classList.toggle('off', m);
+      if (!m && L) AUDIO3.musicStart(L.theme | 0); else AUDIO3.musicStop();
+      toast(m ? 'sound off' : 'sound on', 900);return; }
     if (k === 'Escape') { openSelect(); return; }
   });
   window.addEventListener('keyup', function(e){
@@ -4601,7 +4692,8 @@ function boot(){
   buildDOM(); bindInput();
   flipped = !!save.flipped;
   resize(true);
-  if (save.mute) { AUDIO3.toggleMute(); el.btnMute.textContent = '✕'; }
+  // muted unless the player has explicitly turned sound on: nobody wants a game shouting at them
+  if (save.mute) { AUDIO3.toggleMute(); el.btnMute.textContent = '♪̸'; el.btnMute.classList.add('off'); }
   loadLevel(clamp(save.unlocked, 0, window.LEVELS3.length - 1));
   showTitle();
   requestAnimationFrame(frame);
