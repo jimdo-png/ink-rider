@@ -20,11 +20,14 @@
 
 /* ==== art3.js ==== */
 /* ============================================================================
-   INK RIDER V3 — art3.js — visual layer only. window.ART3
+   INK RIDER V5 — art3.js — visual layer only. window.ART3
    Direction (locked): "wet neon ink on a dusk sky". The drawn line is the hero:
    white-hot core + electric cyan glow, faked with layered strokes — never
    per-segment shadowBlur. Danger reads hot coral/magenta. UI = chunky dark
    glass, heavy italic display type, mono for anything numeric.
+   V5 pass: near-black simplified backdrop, Rider-thick road with energy-flow
+   dashes, chevron-runway boosts, chunky springs, menacing saws, gem stars —
+   the play layer reads like a AAA neon arcade game on a phone.
    World is FIXED 1600x760. The game has already applied its camera transform;
    `cam` here is used ONLY for parallax offsets, viewport culling and vignette.
    Plain ES2019, IIFE, zero external assets. See ART API in SPEC3.md.
@@ -838,14 +841,15 @@
   }
 
   function paintProps(g, cw, ch, kind, base, amp, seed, fill) {
-    // near-layer props: pylons / masts / pines, silhouetted
-    var n = 7;
+    // near-layer props: pylons / masts / pines, silhouetted.
+    // V5: fewer and shorter — they must never crowd the gameplay band.
+    var n = 4;
     g.fillStyle = fill;
     g.strokeStyle = fill;
     for (var i = 0; i < n; i++) {
       var px = 40 + h1(i * 9.7 + seed) * (cw - 80);
       var py = ridgeY(kind === 'city' ? 'roll' : kind, px, base, amp, seed) + 4;
-      var hh = 26 + h1(i * 3.1 + seed * 2) * 44;
+      var hh = 20 + h1(i * 3.1 + seed * 2) * 32;
       if (kind === 'ice' || kind === 'peak') {          // masts
         g.lineWidth = 2;
         g.beginPath(); g.moveTo(px, py); g.lineTo(px, py - hh); g.stroke();
@@ -895,6 +899,18 @@
     g.fillStyle = sky;
     g.fillRect(0, 0, cw, ch);
 
+    // V5 contrast plate: pull the top toward dusk-black and ground the foot,
+    // keeping the theme's dusk band in the middle — baked once, free at runtime.
+    // This is what makes the neon play layer POP.
+    var dk = g.createLinearGradient(0, 0, 0, ch);
+    dk.addColorStop(0, 'rgba(3,2,12,0.55)');
+    dk.addColorStop(0.34, 'rgba(3,2,12,0.26)');
+    dk.addColorStop(0.60, 'rgba(3,2,12,0.04)');
+    dk.addColorStop(0.80, 'rgba(3,2,12,0.10)');
+    dk.addColorStop(1, 'rgba(3,2,12,0.38)');
+    g.fillStyle = dk;
+    g.fillRect(0, 0, cw, ch);
+
     // stars, upper half only, two sizes
     for (var i = 0; i < th.starN; i++) {
       var sx = h1(i * 13.7 + idx * 4.1) * cw;
@@ -941,23 +957,24 @@
     g.fillRect(bx - hr, by - hr, hr * 2, hr * 2);
     g.fillStyle = 'rgba(' + SUN[idx] + ',0.94)';
     g.beginPath(); g.arc(bx, by, br, 0, TAU); g.fill();
-    // horizon band wash sitting on the seam
+    // horizon band wash sitting on the seam (V5: quieter, the neon owns the eye)
     var bandY = ch * 0.62;
     var bg2 = g.createLinearGradient(0, bandY - 40, 0, bandY + 90);
     bg2.addColorStop(0, 'rgba(' + hexRgb(th.band) + ',0)');
-    bg2.addColorStop(0.5, 'rgba(' + hexRgb(th.band) + ',0.16)');
+    bg2.addColorStop(0.5, 'rgba(' + hexRgb(th.band) + ',0.10)');
     bg2.addColorStop(1, 'rgba(' + hexRgb(th.band) + ',0)');
     g.fillStyle = bg2;
     g.fillRect(0, bandY - 40, cw, 130);
 
-    // cloud slabs, flat and graphic
-    var nc = th.weather === 'rain' ? 9 : 5;
+    // cloud slabs: fewer, fainter, pushed into the top band so the gameplay
+    // band stays clean
+    var nc = th.weather === 'rain' ? 6 : 3;
     for (var ci = 0; ci < nc; ci++) {
       var cx2 = h1(ci * 11.3 + idx) * cw;
-      var cy2 = ch * (0.10 + h1(ci * 2.9 + idx * 3) * 0.42);
+      var cy2 = ch * (0.08 + h1(ci * 2.9 + idx * 3) * 0.28);
       var cwid = 90 + h1(ci * 5.1) * 260;
       var chei = 8 + h1(ci * 7.9) * 16;
-      g.fillStyle = 'rgba(' + FOG[idx] + ',' + (0.16 + h1(ci) * 0.2).toFixed(2) + ')';
+      g.fillStyle = 'rgba(' + FOG[idx] + ',' + (0.10 + h1(ci) * 0.12).toFixed(2) + ')';
       g.beginPath();
       if (g.ellipse) g.ellipse(cx2, cy2, cwid / 2, chei / 2, 0, 0, TAU);
       else g.arc(cx2, cy2, chei / 2, 0, TAU);
@@ -976,14 +993,24 @@
     var p = tier === 0 ? 0.70 : (tier === 1 ? 0.46 : 0.22);
     if (!g) return { c: c, wx: -PAD, wy: wy - PADY, p: p };
 
+    // V5: mid/near tiers are LOWER and QUIETER — the band where gameplay
+    // lives stays clean so the neon line owns it
     var base = ch * (tier === 0 ? 0.46 : (tier === 1 ? 0.44 : 0.40));
-    var amp = H * (tier === 0 ? 0.075 : (tier === 1 ? 0.062 : 0.05));
+    var amp = H * (tier === 0 ? 0.075 : (tier === 1 ? 0.046 : 0.034));
     var fill = tier === 0 ? th.hillFar : (tier === 1 ? th.hillMid : th.hillNear);
     var seed = idx * 3.1 + tier * 6.7 + 1.3;
 
     paintRidge(g, cw, ch, th.ridge, base, amp, seed, fill,
-      GLOW[idx], tier === 0 ? 0.22 : (tier === 1 ? 0.13 : 0.07));
+      GLOW[idx], tier === 0 ? 0.18 : (tier === 1 ? 0.08 : 0.04));
     if (tier === 2) paintProps(g, cw, ch, th.ridge, base, amp, seed + 2.2, fill);
+
+    // darken the silhouette itself on mid/near (baked, source-atop = hills only)
+    if (tier > 0) {
+      g.globalCompositeOperation = 'source-atop';
+      g.fillStyle = 'rgba(3,2,12,' + (tier === 1 ? 0.20 : 0.32) + ')';
+      g.fillRect(0, 0, cw, ch);
+      g.globalCompositeOperation = 'source-over';
+    }
 
     // depth haze washing over the layer bottom
     var hz = g.createLinearGradient(0, base - amp, 0, ch);
@@ -1027,8 +1054,8 @@
     try {
       var g = ctx.createRadialGradient(0, 0, 0.30, 0, 0, 1.02);
       g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(0.62, 'rgba(0,0,0,0.10)');
-      g.addColorStop(1, 'rgba(0,0,0,0.52)');
+      g.addColorStop(0.60, 'rgba(0,0,0,0.14)');
+      g.addColorStop(1, 'rgba(0,0,0,0.62)');
       vigGrad = g;
     } catch (e) { vigGrad = null; }
     return vigGrad;
@@ -1518,11 +1545,12 @@
       if (!(w > 0)) continue;
 
       // abyss: three flat bands beat one gradient (no per-frame allocation)
-      ctx.fillStyle = 'rgba(8,3,22,0.16)';
+      // V5: darker throat so the void reads as a real drop
+      ctx.fillStyle = 'rgba(8,3,22,0.24)';
       ctx.fillRect(x0, 0, w, H * 0.30);
-      ctx.fillStyle = 'rgba(7,2,20,0.52)';
+      ctx.fillStyle = 'rgba(6,2,18,0.62)';
       ctx.fillRect(x0, H * 0.30, w, H * 0.34);
-      ctx.fillStyle = 'rgba(3,0,12,0.86)';
+      ctx.fillStyle = 'rgba(2,0,10,0.92)';
       ctx.fillRect(x0, H * 0.64, w, H * 0.36);
 
       // falling light bands
@@ -1545,17 +1573,18 @@
       }
 
       // hazard edges: layered strokes + descending chevron ladder
+      // V5: wider, hotter edge glow — the wall must read from mid-flight
       var pulse = 0.55 + 0.45 * Math.sin(t * 2.4 + zi * 1.7);
       for (var e = 0; e < 2; e++) {
         var ex = e === 0 ? x0 : x1, dir = e === 0 ? -1 : 1;
         ctx.strokeStyle = 'rgba(255,61,126,' + (0.05 + 0.05 * pulse).toFixed(3) + ')';
-        ctx.lineWidth = 9;
+        ctx.lineWidth = 18;
         ctx.beginPath(); ctx.moveTo(ex, 0); ctx.lineTo(ex, H); ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,61,126,' + (0.16 + 0.12 * pulse).toFixed(3) + ')';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255,61,126,' + (0.16 + 0.14 * pulse).toFixed(3) + ')';
+        ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(ex, 0); ctx.lineTo(ex, H); ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,158,196,' + (0.3 + 0.25 * pulse).toFixed(3) + ')';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255,158,196,' + (0.36 + 0.3 * pulse).toFixed(3) + ')';
+        ctx.lineWidth = 1.6;
         ctx.beginPath(); ctx.moveTo(ex, 0); ctx.lineTo(ex, H); ctx.stroke();
 
         ctx.strokeStyle = 'rgba(255,61,126,' + (0.14 + 0.14 * pulse).toFixed(3) + ')';
@@ -1656,9 +1685,9 @@
     ctx.lineCap = 'round';
 
     // road body: two ink-tinted slabs hanging off the line
-    ctx.fillStyle = 'rgba(' + deep + ',0.30)';
+    ctx.fillStyle = 'rgba(' + deep + ',0.34)';
     for (j = 0; j < c.strips.length; j++) ctx.fill(c.strips[j]);
-    ctx.fillStyle = 'rgba(' + deep + ',0.10)';
+    ctx.fillStyle = 'rgba(' + deep + ',0.12)';
     for (j = 0; j < c.strips2.length; j++) ctx.fill(c.strips2[j]);
 
     // deck ribs — a touch more opaque when scaled down, so they survive
@@ -1666,30 +1695,36 @@
     ctx.lineWidth = ds < 0.99 ? 1.2 : 1.4;
     for (j = 0; j < c.ribs.length; j++) ctx.stroke(c.ribs[j]);
 
-    // wet neon: wide halo -> mid glow -> wet edge -> white-hot core.
-    // The two inner passes carry the contrast: on a bright phone screen the
-    // soft outer halo is what washes out, so the core is the one that has to
-    // stay hard. Core is wider and the wet edge hotter than V2.
-    ctx.strokeStyle = 'rgba(' + ink + ',0.13)';
-    ctx.lineWidth = 13;
+    // V5 wet neon: the road is the HERO — huge halo -> wide glow -> mid ->
+    // wet edge -> fat white-hot core (Rider-thick, not hairline). All passes
+    // are strokes of the SAME cached Path2D set. Low quality drops only the
+    // outermost halo: the thick reading survives on phones.
+    if (QUAL !== 0) {
+      ctx.strokeStyle = 'rgba(' + ink + ',0.10)';
+      ctx.lineWidth = 30;
+      for (j = 0; j < nL; j++) ctx.stroke(c.lines[j]);
+    }
+    ctx.strokeStyle = 'rgba(' + ink + ',0.20)';
+    ctx.lineWidth = 17;
     for (j = 0; j < nL; j++) ctx.stroke(c.lines[j]);
-    ctx.strokeStyle = 'rgba(' + ink + ',0.30)';
-    ctx.lineWidth = 7;
+    ctx.strokeStyle = 'rgba(' + ink + ',0.44)';
+    ctx.lineWidth = 9;
     for (j = 0; j < nL; j++) ctx.stroke(c.lines[j]);
-    ctx.strokeStyle = 'rgba(' + ink + ',0.84)';
-    ctx.lineWidth = 3.8;
+    ctx.strokeStyle = 'rgba(' + ink + ',0.92)';
+    ctx.lineWidth = 5.8;
     for (j = 0; j < nL; j++) ctx.stroke(c.lines[j]);
     ctx.strokeStyle = th.inkCore;
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 3.6;
     for (j = 0; j < nL; j++) ctx.stroke(c.lines[j]);
 
-    // travelling specular: dashed pass over the same cached paths
+    // energy flow: bright dashes drifting in the travel direction — ONE extra
+    // dashed stroke of the cached paths, offset animated, zero path rebuilds
     if (ctx.setLineDash) {
-      ctx.setLineDash([26, 210]);
-      ctx.lineWidth = 2.6;
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.setLineDash([30, 130]);
+      ctx.lineWidth = 3.8;
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
       for (j = 0; j < nL; j++) {
-        ctx.lineDashOffset = -((tt * 190) % 236);
+        ctx.lineDashOffset = -((tt * 150) % 160);
         ctx.stroke(c.lines[j]);
       }
       ctx.setLineDash([]);
@@ -1700,9 +1735,9 @@
     for (j = 0; j < c.dots.length; j += 2) {
       var lx = c.dots[j], ly = c.dots[j + 1];
       ctx.fillStyle = 'rgba(' + ink + ',0.40)';
-      ctx.beginPath(); ctx.arc(lx, ly, 4.5, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(lx, ly, 6.5, 0, TAU); ctx.fill();
       ctx.fillStyle = th.inkCore;
-      ctx.beginPath(); ctx.arc(lx, ly, 2.1, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(lx, ly, 3.1, 0, TAU); ctx.fill();
     }
     ctx.restore();
   };
@@ -1735,16 +1770,19 @@
       }
       ctx.stroke();
 
-      // it is ridable ink: same layered signature as the drawn line
+      // it is ridable ink: same V5-thick layered signature as the drawn line
       ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(' + ink + ',0.15)';
-      ctx.lineWidth = 12;
+      ctx.strokeStyle = 'rgba(' + ink + ',0.16)';
+      ctx.lineWidth = 20;
       ctx.beginPath(); ctx.moveTo(x0 + 1, y); ctx.lineTo(x1 - 1, y); ctx.stroke();
-      ctx.strokeStyle = 'rgba(' + ink + ',0.42)';
-      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(' + ink + ',0.46)';
+      ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.moveTo(x0 + 1, y); ctx.lineTo(x1 - 1, y); ctx.stroke();
+      ctx.strokeStyle = 'rgba(' + ink + ',0.9)';
+      ctx.lineWidth = 4.6;
       ctx.beginPath(); ctx.moveTo(x0 + 1, y); ctx.lineTo(x1 - 1, y); ctx.stroke();
       ctx.strokeStyle = th.inkCore;
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 2.8;
       ctx.beginPath(); ctx.moveTo(x0 + 1, y); ctx.lineTo(x1 - 1, y); ctx.stroke();
     }
   };
@@ -1766,11 +1804,12 @@
   // and the flag renders exactly as before. On `reached` the bands are tinted
   // toward the celebration gold instead of being replaced by it.
   ART3.drawFlag = function (ctx, x, y, t, reached, colors) {
+    // V5: bigger cloth, livelier two-phase wave, machined pole base plate.
     x = num(x, 0); y = num(y, 0); t = num(t, 0);
-    var poleH = 60, topY = y - poleH;
-    var wSpd = reached ? 11 : 6.5, amp = reached ? 6 : 3.2;
+    var poleH = 82, topY = y - poleH;
+    var wSpd = reached ? 11.5 : 7, amp = reached ? 8.5 : 4.8;
     var w1 = Math.sin(t * wSpd) * amp, w2 = Math.sin(t * wSpd + 1.5) * amp * 1.35;
-    var cw = 30, ch = 19;
+    var cw = 44, ch = 28;
 
     var band = null;
     if (colors && typeof colors === 'object' && typeof colors.length === 'number' && colors.length === 2) {
@@ -1810,23 +1849,32 @@
         ((c[1] + (210 - c[1]) * k) | 0) + ',' + ((c[2] + (74 - c[2]) * k) | 0) + ')';
     }
 
-    // ground socket
+    // ground socket + machined base plate
     ctx.fillStyle = 'rgba(6,4,18,0.6)';
     ctx.beginPath();
-    if (ctx.ellipse) ctx.ellipse(x, y, 11, 3.5, 0, 0, TAU); else ctx.arc(x, y, 6, 0, TAU);
+    if (ctx.ellipse) ctx.ellipse(x, y + 1, 16, 4.5, 0, 0, TAU); else ctx.arc(x, y, 8, 0, TAU);
     ctx.fill();
+    ctx.fillStyle = 'rgba(10,16,36,0.95)';
+    ctx.fillRect(x - 12, y - 5, 24, 6);
+    ctx.fillStyle = 'rgba(122,230,255,0.25)';
+    ctx.fillRect(x - 12, y - 5, 24, 1.6);
+    ctx.strokeStyle = 'rgba(150,235,255,0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 12, y - 5, 24, 6);
 
     ctx.lineCap = 'round';
-    ctx.strokeStyle = '#0c0a20'; ctx.lineWidth = 4.5;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, topY); ctx.stroke();
-    ctx.strokeStyle = '#c3d1e4'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, topY); ctx.stroke();
+    ctx.strokeStyle = '#0c0a20'; ctx.lineWidth = 5.5;
+    ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x, topY); ctx.stroke();
+    ctx.strokeStyle = '#c3d1e4'; ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x, topY); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x - 1, y - 5); ctx.lineTo(x - 1, topY + 2); ctx.stroke();
 
     if (reached) {
       var pu = 0.5 + 0.5 * Math.sin(t * 9);
       ctx.fillStyle = 'rgba(255,210,74,' + (0.14 + 0.14 * pu).toFixed(3) + ')';
       ctx.save();
-      ctx.beginPath(); ctx.arc(x + 9, topY + 9, 30 + pu * 8, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + 13, topY + 13, 42 + pu * 10, 0, TAU); ctx.fill();
       ctx.restore();
       if (band) {
         bands(gold(band[0]), gold(band[1]), 1);
@@ -1848,35 +1896,22 @@
       ctx.fillStyle = 'rgba(64,233,255,0.18)'; ctx.fill();
       ctx.fillStyle = 'rgba(40,186,220,0.88)'; ctx.fill();
       ctx.strokeStyle = 'rgba(190,248,255,0.9)'; ctx.lineWidth = 1.4; ctx.stroke();
-      // chequer notch, two squares, reads as a finish flag at a glance
+      // chequer notch, four squares, reads as a finish flag at a glance
       ctx.fillStyle = 'rgba(240,255,255,0.55)';
-      ctx.fillRect(x + 3, topY + 4, 7, 6);
-      ctx.fillRect(x + 15, topY + 11, 7, 6);
+      ctx.fillRect(x + 5, topY + 5, 10, 8);
+      ctx.fillRect(x + 23, topY + 14, 10, 8);
+      ctx.fillRect(x + 23, topY + 5, 10, 8);
+      ctx.fillStyle = 'rgba(10,20,40,0.5)';
+      ctx.fillRect(x + 14, topY + 9, 9, 8);
     }
 
     ctx.fillStyle = reached ? '#fff6cf' : '#e3eef8';
-    ctx.beginPath(); ctx.arc(x, topY - 2, 3.2, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, topY - 3, 4.2, 0, TAU); ctx.fill();
   };
 
   /* -------------------------------------------------------------------- saw */
 
-  ART3.drawSaw = function (ctx, x, y, r, t) {
-    x = num(x, 0); y = num(y, 0); r = num(r, 30); t = num(t, 0);
-    var rot = t * 7.4 + x * 0.7, teeth = 12;
-
-    ctx.save();
-    ctx.translate(x, y);
-
-    ctx.strokeStyle = 'rgba(255,61,126,0.09)';
-    ctx.lineWidth = 10;
-    ctx.beginPath(); ctx.arc(0, 0, r + 5, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,61,126,0.28)';
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(0, 0, r + 1.5, 0, TAU); ctx.stroke();
-
-    ctx.rotate(rot);
-
-    ctx.fillStyle = '#ccd6e6';
+  function sawTeeth(ctx, r, teeth) {          // tooth ring at the current transform
     ctx.beginPath();
     for (var i = 0; i < teeth; i++) {
       var a0 = (i / teeth) * TAU;
@@ -1887,28 +1922,80 @@
       ctx.lineTo(Math.cos(a2) * r * 0.86, Math.sin(a2) * r * 0.86);
     }
     ctx.fill();
+  }
 
-    ctx.fillStyle = '#93a0bb';
+  ART3.drawSaw = function (ctx, x, y, r, t) {
+    // V5 menace: pulsing danger halo a shade wider than the kill circle,
+    // motion-smeared teeth, machined hub with grooves + slots + hot core.
+    x = num(x, 0); y = num(y, 0); r = num(r, 30); t = num(t, 0);
+    var rot = t * 7.4 + x * 0.7, teeth = 12;
+    var pu = 0.5 + 0.5 * Math.sin(t * 5.6 + x * 0.05);
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // danger halo, breathing just outside the blade
+    ctx.strokeStyle = 'rgba(255,61,126,' + (0.05 + 0.06 * pu).toFixed(3) + ')';
+    ctx.lineWidth = 16;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.26 + pu * 2, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,61,126,' + (0.16 + 0.16 * pu).toFixed(3) + ')';
+    ctx.lineWidth = 4.5;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.26 + pu * 2, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,158,196,' + (0.24 + 0.22 * pu).toFixed(3) + ')';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.26 + pu * 2, 0, TAU); ctx.stroke();
+
+    // tooth motion smear: two ghost rings trailing the spin (skipped on low)
+    if (QUAL !== 0) {
+      ctx.save();
+      ctx.rotate(rot - 0.22);
+      ctx.fillStyle = 'rgba(204,214,230,0.10)';
+      sawTeeth(ctx, r, teeth);
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.rotate(rot - 0.11);
+    ctx.fillStyle = 'rgba(204,214,230,0.22)';
+    sawTeeth(ctx, r, teeth);
+    ctx.restore();
+
+    ctx.rotate(rot);
+    ctx.fillStyle = '#d7e0ee';
+    sawTeeth(ctx, r, teeth);
+
+    // machined disc: rim -> face -> groove rings
+    ctx.fillStyle = '#9aa6c0';
     ctx.beginPath(); ctx.arc(0, 0, r * 0.88, 0, TAU); ctx.fill();
     ctx.fillStyle = '#5c6786';
     ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, TAU); ctx.fill();
-    // brushed-metal sweep
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = r * 0.14;
+    ctx.strokeStyle = 'rgba(20,24,40,0.5)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.75, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.52, 0, TAU); ctx.stroke();
+    // brushed-metal sweeps, opposite quadrants
+    ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+    ctx.lineWidth = r * 0.13;
     ctx.beginPath(); ctx.arc(0, 0, r * 0.74, -2.4, -0.8); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.74, 0.7, 2.1); ctx.stroke();
 
+    // lightening slots
     ctx.fillStyle = '#2c3149';
     for (var hI = 0; hI < 3; hI++) {
       var ha = hI * TAU / 3;
       ctx.beginPath();
-      ctx.arc(Math.cos(ha) * r * 0.42, Math.sin(ha) * r * 0.42, r * 0.115, 0, TAU);
+      ctx.arc(Math.cos(ha) * r * 0.42, Math.sin(ha) * r * 0.42, r * 0.13, 0, TAU);
       ctx.fill();
     }
 
+    // hot arbor: danger core with a bright collar + specular
+    ctx.strokeStyle = 'rgba(255,61,126,' + (0.4 + 0.3 * pu).toFixed(3) + ')';
+    ctx.lineWidth = r * 0.07;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.25, 0, TAU); ctx.stroke();
     ctx.fillStyle = '#ff3d7e';
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.17, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.18, 0, TAU); ctx.fill();
     ctx.fillStyle = '#ffd3e2';
-    ctx.beginPath(); ctx.arc(-r * 0.05, -r * 0.05, r * 0.06, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(-r * 0.05, -r * 0.05, r * 0.065, 0, TAU); ctx.fill();
 
     ctx.restore();
   };
@@ -1985,9 +2072,11 @@
     var w = x1 - x0;
     if (!(w > 0) || !(H > yTop)) return;
 
-    // flat molten bands, no gradient allocation
-    ctx.fillStyle = '#e0341f';
+    // flat molten bands, no gradient allocation (V5: hotter top strip)
+    ctx.fillStyle = '#f2461f';
     ctx.fillRect(x0, yTop, w, Math.min(26, H - yTop));
+    ctx.fillStyle = 'rgba(255,190,90,0.30)';
+    ctx.fillRect(x0, yTop, w, Math.min(8, H - yTop));
     if (H - yTop > 26) {
       ctx.fillStyle = '#8c1116';
       ctx.fillRect(x0, yTop + 26, w, Math.min(60, H - yTop - 26));
@@ -1996,9 +2085,12 @@
       ctx.fillStyle = '#2c030b';
       ctx.fillRect(x0, yTop + 86, w, H - yTop - 86);
     }
-    // heat haze above the pool
-    ctx.fillStyle = 'rgba(255,120,40,0.07)';
-    ctx.fillRect(x0, yTop - 22, w, 22);
+    // heat glow rising off the pool: two stacked flat bands, ember-bright
+    var hpu = 0.5 + 0.5 * Math.sin(t * 1.8 + x0 * 0.01);
+    ctx.fillStyle = 'rgba(255,150,50,' + (0.06 + 0.04 * hpu).toFixed(3) + ')';
+    ctx.fillRect(x0, yTop - 44, w, 44);
+    ctx.fillStyle = 'rgba(255,120,40,' + (0.09 + 0.05 * hpu).toFixed(3) + ')';
+    ctx.fillRect(x0, yTop - 20, w, 20);
 
     ctx.save();
     ctx.lineCap = 'round';
@@ -2006,9 +2098,9 @@
     ctx.beginPath();
     ctx.moveTo(x0, lavaSurfY(x0, yTop, t));
     for (var sx = x0 + 8; sx <= x1; sx += 8) ctx.lineTo(sx, lavaSurfY(sx, yTop, t));
-    ctx.strokeStyle = 'rgba(255,140,60,0.26)'; ctx.lineWidth = 10; ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,184,96,0.72)'; ctx.lineWidth = 4; ctx.stroke();
-    ctx.strokeStyle = '#fff3c0'; ctx.lineWidth = 1.7; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,140,60,0.30)'; ctx.lineWidth = 16; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,184,96,0.8)'; ctx.lineWidth = 6.5; ctx.stroke();
+    ctx.strokeStyle = '#fff8dc'; ctx.lineWidth = 2.6; ctx.stroke();
     ctx.restore();
 
     var nb = clamp(Math.round(w / 60), 2, 8), i;
@@ -2022,119 +2114,162 @@
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(bx, by, br, 0, TAU); ctx.stroke();
     }
-    for (i = 0; i < 6; i++) {
+    // occasional BIG slow bubbles with a highlight — the pool is boiling
+    for (i = 0; i < 2; i++) {
+      var Bx = x0 + 14 + h1(i * 23.1 + x0 * 0.7) * Math.max(1, w - 28);
+      var Bper = 3.4 + h1(i * 5.9) * 2.2;
+      var Bcyc = (t / Bper + h1(i * 11.3)) % 1;
+      var Br = Bcyc * Bcyc * 13;
+      var By = lavaSurfY(Bx, yTop, t) + 4 - Bcyc * 8;
+      var Ba = 0.9 * (1 - Bcyc);
+      ctx.strokeStyle = 'rgba(255,214,130,' + Ba.toFixed(3) + ')';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.arc(Bx, By, Br, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,248,220,' + (Ba * 0.6).toFixed(3) + ')';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(Bx - Br * 0.3, By - Br * 0.3, Br * 0.4, 0, TAU); ctx.stroke();
+    }
+    for (i = 0; i < 8; i++) {
       var ex = x0 + h1(i * 9.9 + x1) * w;
-      var eh = 16 + h1(i * 4.4) * 34;
+      var eh = 20 + h1(i * 4.4) * 44;
       var ey = yTop - ((t * (16 + h1(i) * 22) + h1(i * 2.2) * eh) % eh);
-      ctx.fillStyle = 'rgba(255,172,84,' + (0.5 * (1 - (yTop - ey) / eh)).toFixed(3) + ')';
-      ctx.fillRect(ex, ey, 2, 2);
+      ctx.fillStyle = 'rgba(255,182,90,' + (0.6 * (1 - (yTop - ey) / eh)).toFixed(3) + ')';
+      ctx.fillRect(ex, ey, 2.5, 2.5);
     }
   };
 
   /* -------------------------------------------------------------- boost pad */
 
   ART3.drawBoost = function (ctx, x, y, angle, t) {
+    // V5: a big bright chevron RUNWAY on the road (~96 world px), unmissable.
+    // The engine additionally wraps this in a ~1.25x scale on phones.
     x = num(x, 0); y = num(y, 0); angle = num(angle, 0); t = num(t, 0);
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
-
-    // pad plate sitting on the ink, slight lift
-    ctx.fillStyle = 'rgba(6,20,26,0.8)';
-    ctx.beginPath();
-    ctx.moveTo(-26, 0); ctx.lineTo(26, 0); ctx.lineTo(22, -11); ctx.lineTo(-22, -11);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(120,255,230,0.5)';
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-
-    // three chevrons marching in travel direction
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    // runway plate hugging the ink, with a pulsing energy interior
+    var pu = 0.5 + 0.5 * Math.sin(t * 5.2);
+    ctx.beginPath();
+    ctx.moveTo(-48, 1.5); ctx.lineTo(48, 1.5); ctx.lineTo(42, -16); ctx.lineTo(-42, -16);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(4,24,26,0.88)';
+    ctx.fill();
+    ctx.fillStyle = 'rgba(60,255,190,' + (0.05 + 0.08 * pu).toFixed(3) + ')';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(80,255,200,0.16)';
+    ctx.lineWidth = 7;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(130,255,222,0.6)';
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    // three BIG forward arrows with a pulse racing through them
     for (var i = 0; i < 3; i++) {
-      var ph = (t * 2.2 + i * 0.34) % 1;
-      var cx = -18 + ph * 40;
-      var a = Math.sin(Math.PI * ph);
-      ctx.strokeStyle = 'rgba(150,255,220,' + (a * 0.85).toFixed(3) + ')';
-      ctx.lineWidth = 3.4;
+      var cx = -26 + i * 26;
+      var ph = (t * 1.7 - i * 0.28) % 1;
+      if (ph < 0) ph += 1;
+      var w = Math.sin(Math.PI * ph);
+      var a = 0.30 + 0.70 * w * w;
       ctx.beginPath();
-      ctx.moveTo(cx - 6, -2.5); ctx.lineTo(cx + 1, -6.5); ctx.lineTo(cx - 6, -10.5);
+      ctx.moveTo(cx - 8, -13); ctx.lineTo(cx + 8, -7.2); ctx.lineTo(cx - 8, -1.5);
+      ctx.strokeStyle = 'rgba(90,255,205,' + (a * 0.38).toFixed(3) + ')';
+      ctx.lineWidth = 9;
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,' + (a * 0.6).toFixed(3) + ')';
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = 'rgba(190,255,235,' + a.toFixed(3) + ')';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,' + (a * 0.8).toFixed(3) + ')';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
     }
 
-    // launch glow smear ahead of the pad
-    var pu = 0.5 + 0.5 * Math.sin(t * 6);
-    ctx.strokeStyle = 'rgba(120,255,225,' + (0.12 + 0.16 * pu).toFixed(3) + ')';
-    ctx.lineWidth = 7;
-    ctx.beginPath(); ctx.moveTo(26, -6); ctx.lineTo(44 + pu * 8, -6); ctx.stroke();
-    ctx.strokeStyle = 'rgba(120,255,225,0.4)';
+    // deck light where plate meets road + launch glow smear ahead
+    ctx.strokeStyle = 'rgba(160,255,230,0.8)';
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(-26, -0.5); ctx.lineTo(26, -0.5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-46, 0); ctx.lineTo(46, 0); ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,255,225,' + (0.10 + 0.16 * pu).toFixed(3) + ')';
+    ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.moveTo(48, -7); ctx.lineTo(76 + pu * 14, -7); ctx.stroke();
+    ctx.strokeStyle = 'rgba(220,255,244,' + (0.22 + 0.26 * pu).toFixed(3) + ')';
+    ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(48, -7); ctx.lineTo(66 + pu * 10, -7); ctx.stroke();
     ctx.restore();
   };
 
   /* ------------------------------------------------------------- spring pad */
 
   ART3.drawSpring = function (ctx, x, y, t, compress) {
+    // V5: proper chunky machine, ~2x the old footprint (56 wide, ~52 tall).
+    // Squash-and-stretch rides the compress arg: fires -> coil slams down,
+    // then overshoots past rest height as compress decays back to 0.
     x = num(x, 0); y = num(y, 0); t = num(t, 0);
     var c = clamp(num(compress, 0), 0, 1);
-    var restH = 20, hh = restH * (1 - 0.72 * c);
+    var restH = 38;
+    var hh = restH * (1 - 0.66 * c + 0.38 * Math.sin(Math.PI * c) * (1 - c));
     ctx.save();
     ctx.translate(x, y);
-
-    // base plate
-    ctx.fillStyle = 'rgba(8,14,32,0.9)';
-    ctx.fillRect(-20, -4, 40, 5);
-    ctx.strokeStyle = 'rgba(255,210,74,0.45)';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(-20, -4, 40, 5);
-
-    // coil: zigzag between plate and top pad
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    var turns = 4, py = -4;
-    ctx.moveTo(-11, py);
-    for (var i = 0; i < turns; i++) {
-      var y1 = -4 - (hh / turns) * (i + 0.5);
-      var y2 = -4 - (hh / turns) * (i + 1);
-      ctx.lineTo(11, y1);
-      ctx.lineTo(-11, y2);
-    }
-    ctx.strokeStyle = 'rgba(255,210,74,0.22)'; ctx.lineWidth = 7; ctx.stroke();
-    ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 2.6; ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,250,220,0.85)'; ctx.lineWidth = 1; ctx.stroke();
 
-    // top pad, bounces with the coil
-    var topY = -4 - hh;
+    // heavy machined foot with a gold edge light and bolts
+    ctx.fillStyle = 'rgba(8,14,32,0.94)';
+    ctx.fillRect(-28, -6, 56, 8);
+    ctx.fillStyle = 'rgba(255,210,74,0.20)';
+    ctx.fillRect(-28, -6, 56, 2);
+    ctx.strokeStyle = 'rgba(255,210,74,0.5)';
+    ctx.lineWidth = 1.4;
+    ctx.strokeRect(-28, -6, 56, 8);
+    ctx.fillStyle = 'rgba(255,225,140,0.7)';
+    ctx.fillRect(-24, -3.6, 3, 3);
+    ctx.fillRect(21, -3.6, 3, 3);
+
+    // coil: 5 fat turns, layered warm-gold neon
+    ctx.beginPath();
+    var turns = 5, py = -6;
+    ctx.moveTo(-16, py);
+    for (var i = 0; i < turns; i++) {
+      var y1 = py - (hh / turns) * (i + 0.5);
+      var y2 = py - (hh / turns) * (i + 1);
+      ctx.lineTo(16, y1);
+      ctx.lineTo(-16, y2);
+    }
+    ctx.strokeStyle = 'rgba(255,210,74,0.16)'; ctx.lineWidth = 11; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,210,74,0.45)'; ctx.lineWidth = 6; ctx.stroke();
+    ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 3.4; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,252,230,0.9)'; ctx.lineWidth = 1.3; ctx.stroke();
+
+    // top plate: bounces with the coil, squashes WIDE under compression
+    var topY = py - hh, tw = 24 * (1 + 0.3 * c);
     ctx.fillStyle = '#1a1330';
-    ctx.fillRect(-17, topY - 6, 34, 7);
-    ctx.fillStyle = 'rgba(255,210,74,' + (0.5 + 0.4 * c).toFixed(2) + ')';
-    ctx.fillRect(-17, topY - 6, 34, 2.4);
-    ctx.strokeStyle = 'rgba(255,240,180,0.7)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-17, topY - 6, 34, 7);
+    ctx.fillRect(-tw, topY - 8, tw * 2, 9);
+    ctx.fillStyle = 'rgba(255,210,74,' + (0.55 + 0.4 * c).toFixed(2) + ')';
+    ctx.fillRect(-tw, topY - 8, tw * 2, 3);
+    ctx.strokeStyle = 'rgba(255,240,180,0.8)';
+    ctx.lineWidth = 1.3;
+    ctx.strokeRect(-tw, topY - 8, tw * 2, 9);
 
     // up-arrows breathing above the pad
     var idle = 0.5 + 0.5 * Math.sin(t * 3.4);
     for (var k = 0; k < 2; k++) {
-      var ay = topY - 12 - k * 11 - idle * 3;
-      var aa = (0.34 - k * 0.13) * (0.55 + 0.45 * idle) + c * 0.4;
+      var ay = topY - 16 - k * 14 - idle * 4;
+      var aa = (0.38 - k * 0.14) * (0.55 + 0.45 * idle) + c * 0.4;
       ctx.strokeStyle = 'rgba(255,225,140,' + clamp(aa, 0, 1).toFixed(3) + ')';
-      ctx.lineWidth = 2.6;
+      ctx.lineWidth = 3.4;
       ctx.beginPath();
-      ctx.moveTo(-8, ay); ctx.lineTo(0, ay - 7); ctx.lineTo(8, ay);
+      ctx.moveTo(-11, ay); ctx.lineTo(0, ay - 9); ctx.lineTo(11, ay);
       ctx.stroke();
     }
-    if (c > 0.35) {   // just fired: shock ring
-      var rr = (1 - c) * 46 + 8;
-      ctx.strokeStyle = 'rgba(255,240,190,' + (c * 0.5).toFixed(3) + ')';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(0, topY - 4, rr, 0, TAU); ctx.stroke();
+    if (c > 0.35) {   // just fired: double shock ring
+      var rr = (1 - c) * 60 + 10;
+      ctx.strokeStyle = 'rgba(255,240,190,' + (c * 0.55).toFixed(3) + ')';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.arc(0, topY - 5, rr, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,' + (c * 0.3).toFixed(3) + ')';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(0, topY - 5, rr * 0.66, 0, TAU); ctx.stroke();
     }
     ctx.restore();
   };
@@ -2227,27 +2362,57 @@
     ctx.restore();
   }
 
+  function strokeStar(ctx, s, col, lw) {
+    var p = starPath();
+    ctx.save();
+    ctx.scale(s, s);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = lw / s;
+    ctx.lineJoin = 'round';
+    if (p) {
+      ctx.stroke(p);
+    } else {
+      ctx.beginPath();
+      for (var i = 0; i < 10; i++) {
+        var rr = (i % 2 === 0) ? 1 : 0.44;
+        var a = -Math.PI / 2 + i * Math.PI / 5;
+        var px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   ART3.drawStar = function (ctx, x, y, t, collected) {
+    // V5: faceted-gem reading — big glow, amber under-facet, hot core,
+    // rim line, plus a tiny orbiting sparkle. Collected = dim hollow shell.
     x = num(x, 0); y = num(y, 0); t = num(t, 0);
     ctx.save();
     ctx.translate(x, y);
 
     if (collected) {
       ctx.rotate(h1(x * 0.37) * TAU);
-      ctx.globalAlpha = 0.15;
-      fillStar(ctx, 9, '#cbbb8d');
+      ctx.globalAlpha *= 0.30;
+      fillStar(ctx, 10, 'rgba(203,187,141,0.35)');
+      strokeStar(ctx, 10, 'rgba(230,214,168,0.8)', 1.2);
       ctx.restore();
       return;
     }
 
     var bob = Math.sin(t * 2.2 + x * 0.03) * 3;
     ctx.translate(0, bob);
-    var s = 10 * (1 + 0.08 * Math.sin(t * 2.8 + x * 0.05));
+    var s = 12 * (1 + 0.08 * Math.sin(t * 2.8 + x * 0.05));
     ctx.rotate(t * 0.7 + x * 0.01);
-    fillStar(ctx, s * 2.2, 'rgba(255,210,74,0.09)');
-    fillStar(ctx, s * 1.38, 'rgba(255,210,74,0.24)');
+    if (QUAL !== 0) fillStar(ctx, s * 2.9, 'rgba(255,210,74,0.07)');
+    fillStar(ctx, s * 2.0, 'rgba(255,210,74,0.13)');
+    fillStar(ctx, s * 1.38, 'rgba(255,210,74,0.28)');
     fillStar(ctx, s, '#ffd24a');
-    fillStar(ctx, s * 0.5, 'rgba(255,255,255,0.92)');
+    fillStar(ctx, s * 0.72, '#e8a92c');          // under-facet: cut-gem depth
+    fillStar(ctx, s * 0.44, '#fff3c4');
+    fillStar(ctx, s * 0.22, '#ffffff');
+    strokeStar(ctx, s, 'rgba(255,246,214,0.85)', 1.3);
     ctx.restore();
 
     // sparkle cross, counter-rotating so the pickup twinkles
@@ -2255,13 +2420,21 @@
     ctx.save();
     ctx.translate(x, y + bob);
     ctx.rotate(-t * 0.45);
-    ctx.strokeStyle = 'rgba(255,244,200,' + (tw * 0.5).toFixed(3) + ')';
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(255,244,200,' + (tw * 0.55).toFixed(3) + ')';
+    ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.moveTo(-20 * tw, 0); ctx.lineTo(20 * tw, 0);
-    ctx.moveTo(0, -20 * tw); ctx.lineTo(0, 20 * tw);
+    ctx.moveTo(-24 * tw, 0); ctx.lineTo(24 * tw, 0);
+    ctx.moveTo(0, -24 * tw); ctx.lineTo(0, 24 * tw);
     ctx.stroke();
     ctx.restore();
+
+    // tiny orbiting glint (skipped on low quality)
+    if (QUAL !== 0) {
+      var oa = -t * 1.6 + x * 0.02;
+      var ox = x + Math.cos(oa) * 19, oy = y + bob + Math.sin(oa) * 19 * 0.6;
+      ctx.fillStyle = 'rgba(255,252,230,' + (0.5 + 0.4 * Math.sin(t * 6 + x)).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(ox, oy, 1.6, 0, TAU); ctx.fill();
+    }
   };
 
   /* ------------------------------------------------------------------- bike
@@ -2274,7 +2447,7 @@
     body: '#1e1740', dark: '#100c22', tank: '#2e2660', acc: '#6fe6ff',
     pipe: '#939bb5', rim: 'rgba(111,230,255,0.55)', spoke: '#9fabc8',
     suit: '#2a2450', suit2: '#3a3268', helm: '#ffcf5e', visor: '#0a1226',
-    scarf: '#ff3d7e', light: '#ffe9b0'
+    scarf: '#ff3d7e', light: '#ffe9b0', rimlt: 'rgba(255,255,255,0.5)'
   };
   var GPAL = {
     body: 'rgba(150,225,255,0.30)', dark: 'rgba(120,200,235,0.26)',
@@ -2283,16 +2456,19 @@
     spoke: 'rgba(190,240,255,0.24)', suit: 'rgba(150,225,255,0.28)',
     suit2: 'rgba(160,230,255,0.24)', helm: 'rgba(215,250,255,0.34)',
     visor: 'rgba(60,120,150,0.3)', scarf: 'rgba(210,250,255,0.24)',
-    light: 'rgba(230,255,255,0.3)'
+    light: 'rgba(230,255,255,0.3)', rimlt: 'rgba(220,250,255,0.2)'
   };
 
   function drawWheel(ctx, x, y, rot, P) {
     ctx.save();
     ctx.translate(x, y);
-    ctx.strokeStyle = P.dark; ctx.lineWidth = 3.2;
+    ctx.strokeStyle = P.dark; ctx.lineWidth = 3.8;
     ctx.beginPath(); ctx.arc(0, 0, WHEEL_R - 1.4, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = P.rim; ctx.lineWidth = 1;
+    ctx.strokeStyle = P.rim; ctx.lineWidth = 1.3;
     ctx.beginPath(); ctx.arc(0, 0, WHEEL_R - 3, 0, TAU); ctx.stroke();
+    // rim light: top-edge catch so the wheel reads round, not flat
+    ctx.strokeStyle = P.rimlt; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(0, 0, WHEEL_R - 0.6, -2.6, -0.9); ctx.stroke();
     ctx.rotate(rot);
     ctx.strokeStyle = P.spoke; ctx.lineWidth = 1.1;
     ctx.beginPath();
@@ -2312,21 +2488,23 @@
     drawWheel(ctx, 11, AXLE_Y - forkUp * 0.4, wheelRot, P);
 
     ctx.lineCap = 'round';
-    // swingarm + fork
-    ctx.strokeStyle = P.body; ctx.lineWidth = 2.6;
+    // swingarm + fork — heavier members so the machine silhouettes
+    ctx.strokeStyle = P.body; ctx.lineWidth = 3.3;
     ctx.beginPath(); ctx.moveTo(-11, AXLE_Y); ctx.lineTo(-3, 1); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(11, AXLE_Y - forkUp * 0.4); ctx.lineTo(7.5, -6 - forkUp); ctx.stroke();
 
     // fenders
-    ctx.strokeStyle = P.dark; ctx.lineWidth = 1.8;
+    ctx.strokeStyle = P.dark; ctx.lineWidth = 2.3;
     ctx.beginPath(); ctx.arc(11, AXLE_Y - forkUp * 0.4, WHEEL_R + 2.2, -2.5, -1.0); ctx.stroke();
     ctx.beginPath(); ctx.arc(-11, AXLE_Y, WHEEL_R + 2.2, -2.2, -1.4); ctx.stroke();
 
     // exhaust + tip
-    ctx.strokeStyle = P.pipe; ctx.lineWidth = 2.3;
+    ctx.strokeStyle = P.pipe; ctx.lineWidth = 2.8;
     ctx.beginPath(); ctx.moveTo(-3, 2.6); ctx.lineTo(-16, 3.4); ctx.stroke();
+    ctx.strokeStyle = P.rimlt; ctx.lineWidth = 0.9;
+    ctx.beginPath(); ctx.moveTo(-4, 1.8); ctx.lineTo(-15, 2.6); ctx.stroke();
     ctx.fillStyle = P.dark;
-    ctx.beginPath(); ctx.arc(-16.6, 3.4, 1.9, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(-16.6, 3.4, 2.2, 0, TAU); ctx.fill();
 
     // frame + tank + tail
     ctx.fillStyle = P.body;
@@ -2353,8 +2531,14 @@
     ctx.lineTo(0.5, -2.8);
     ctx.closePath();
     ctx.fill();
+    // rim light riding the chassis + tank top edge
+    ctx.strokeStyle = P.rimlt; ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(-10, -2.4); ctx.lineTo(-3.5, -5.8); ctx.lineTo(3, -6);
+    ctx.quadraticCurveTo(6.6, -5.7, 7.6, -3.4);
+    ctx.stroke();
     // ink racing stripe
-    ctx.strokeStyle = P.acc; ctx.lineWidth = 1.1;
+    ctx.strokeStyle = P.acc; ctx.lineWidth = 1.3;
     ctx.beginPath(); ctx.moveTo(-9.5, -2.4); ctx.lineTo(6.8, -4); ctx.stroke();
     // number plate decal
     ctx.fillStyle = P.acc;
@@ -2363,15 +2547,20 @@
     ctx.globalAlpha /= 0.75;
 
     // bars + headlight
-    ctx.strokeStyle = P.dark; ctx.lineWidth = 1.9;
+    ctx.strokeStyle = P.dark; ctx.lineWidth = 2.3;
     ctx.beginPath(); ctx.moveTo(7.5, -6 - forkUp); ctx.lineTo(4.8, -9.6 - forkUp); ctx.stroke();
     ctx.fillStyle = P.light;
-    ctx.beginPath(); ctx.arc(9, -5 - forkUp, 1.7, 0, TAU); ctx.fill();
-    if (hot > 0) {   // headlight throw at speed
-      ctx.fillStyle = 'rgba(255,235,170,' + (hot * 0.16).toFixed(3) + ')';
+    ctx.beginPath(); ctx.arc(9, -5 - forkUp, 2, 0, TAU); ctx.fill();
+    if (hot > 0) {   // headlight throw at speed: long soft cone + hot inner beam
+      ctx.fillStyle = 'rgba(255,235,170,' + (hot * 0.20).toFixed(3) + ')';
       ctx.beginPath();
-      ctx.moveTo(9.6, -6.4 - forkUp); ctx.lineTo(34, -12 - forkUp);
-      ctx.lineTo(34, 1 - forkUp); ctx.closePath();
+      ctx.moveTo(9.6, -6.4 - forkUp); ctx.lineTo(44, -14 - forkUp);
+      ctx.lineTo(44, 2 - forkUp); ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,248,214,' + (hot * 0.18).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.moveTo(9.6, -5.8 - forkUp); ctx.lineTo(30, -9 - forkUp);
+      ctx.lineTo(30, -2.6 - forkUp); ctx.closePath();
       ctx.fill();
     }
   }
@@ -2384,7 +2573,7 @@
     ctx.lineCap = 'round';
 
     // rear leg to peg (knee lifts when tucked)
-    ctx.strokeStyle = P.suit; ctx.lineWidth = 2.8;
+    ctx.strokeStyle = P.suit; ctx.lineWidth = 3.3;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(3.4, 2.2 - 1.6 * tuck);
@@ -2392,15 +2581,21 @@
     ctx.stroke();
 
     // torso
-    ctx.strokeStyle = P.suit2; ctx.lineWidth = 3.6;
+    ctx.strokeStyle = P.suit2; ctx.lineWidth = 4.3;
     ctx.beginPath();
     ctx.moveTo(0, 0.6);
     ctx.quadraticCurveTo(1.6 + tuck, -4.4 + 1.4 * tuck, 5 - 0.8 * tuck, -7.6 + 2.6 * tuck);
     ctx.stroke();
+    // spine rim light: one bright thread along the back
+    ctx.strokeStyle = P.rimlt; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-0.6, 0.2);
+    ctx.quadraticCurveTo(0.8 + tuck, -4.8 + 1.4 * tuck, 4.2 - 0.8 * tuck, -8.2 + 2.6 * tuck);
+    ctx.stroke();
 
     // arm to grip, or fist up on a win
     var hx = 5 - 0.8 * tuck, hy = -7.2 + 2.6 * tuck;
-    ctx.strokeStyle = P.suit; ctx.lineWidth = 2.3;
+    ctx.strokeStyle = P.suit; ctx.lineWidth = 2.8;
     ctx.beginPath();
     ctx.moveTo(hx - 0.5, hy);
     if (armPump > 0) {
@@ -2430,19 +2625,23 @@
       ctx.globalAlpha /= 0.85;
     }
 
-    // helmet + visor + shine
+    // helmet + visor + rim-light shine
     var hdx = hx + 1, hdy = hy - 2.6;
     ctx.fillStyle = P.helm;
-    ctx.beginPath(); ctx.arc(hdx, hdy, 3.5, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(hdx, hdy, 3.9, 0, TAU); ctx.fill();
     ctx.fillStyle = P.visor;
     ctx.beginPath();
-    ctx.arc(hdx, hdy, 3.5, -0.55, 0.78);
-    ctx.quadraticCurveTo(hdx + 1.3, hdy + 0.4, hdx + 0.9, hdy - 1.7);
+    ctx.arc(hdx, hdy, 3.9, -0.55, 0.78);
+    ctx.quadraticCurveTo(hdx + 1.4, hdy + 0.4, hdx + 1, hdy - 1.9);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-    ctx.lineWidth = 0.85;
-    ctx.beginPath(); ctx.arc(hdx, hdy, 3.5, -2.6, -1.4); ctx.stroke();
+    // visor glint
+    ctx.strokeStyle = 'rgba(150,230,255,0.6)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.arc(hdx, hdy, 3.1, -0.3, 0.5); ctx.stroke();
+    ctx.strokeStyle = P.rimlt;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(hdx, hdy, 3.9, -2.7, -1.3); ctx.stroke();
 
     ctx.restore();
   }
@@ -2595,14 +2794,30 @@
     drawBikeBody(ctx, wheelRot, forkUp, PAL, hot);
     drawRider(ctx, rlean, tuck, 0, clamp(hot * 1.2 - 0.25, 0, 1), PAL);
 
-    // exhaust flame flicker when pinned
-    if (hot > 0.72 && !b.airborne) {
-      var fl = 3 + Math.random() * 4;
-      ctx.fillStyle = 'rgba(255,150,70,' + (0.25 + Math.random() * 0.3).toFixed(2) + ')';
+    // exhaust: ember glow at speed, full boost flame trail when pinned
+    if (hot > 0.3) {
+      ctx.fillStyle = 'rgba(255,170,80,' + (hot * 0.5).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(-16.6, 3.4, 1.3, 0, TAU); ctx.fill();
+    }
+    if (hot > 0.72) {
+      var fk = (hot - 0.72) / 0.28;
+      var fl = 5 + Math.random() * 6 + fk * 6;
+      // outer flame
+      ctx.fillStyle = 'rgba(255,120,50,' + (0.22 + Math.random() * 0.25).toFixed(2) + ')';
       ctx.beginPath();
-      ctx.moveTo(-17, 2.2); ctx.lineTo(-17 - fl, 3.4); ctx.lineTo(-17, 4.6);
+      ctx.moveTo(-17, 1.6); ctx.lineTo(-17 - fl * 1.5, 3.4); ctx.lineTo(-17, 5.2);
       ctx.closePath();
       ctx.fill();
+      // hot core flame
+      ctx.fillStyle = 'rgba(255,220,140,' + (0.35 + Math.random() * 0.3).toFixed(2) + ')';
+      ctx.beginPath();
+      ctx.moveTo(-17, 2.4); ctx.lineTo(-17 - fl * 0.8, 3.4); ctx.lineTo(-17, 4.4);
+      ctx.closePath();
+      ctx.fill();
+      // afterglow streak trailing the pipe
+      ctx.strokeStyle = 'rgba(255,180,90,' + (0.12 + fk * 0.14).toFixed(3) + ')';
+      ctx.lineWidth = 3.6;
+      ctx.beginPath(); ctx.moveTo(-19, 3.4); ctx.lineTo(-30 - fk * 12, 3.8); ctx.stroke();
     }
     ctx.restore();
   };
@@ -2683,7 +2898,7 @@
 
   var CAP = 320;
   var PT_PUFF = 0, PT_DEBRIS = 1, PT_CONF = 2, PT_SPARK = 3, PT_TWK = 4,
-    PT_CHEV = 5, PT_RING = 6, PT_RIB = 7, PT_SPECK = 8;
+    PT_CHEV = 5, PT_RING = 6, PT_RIB = 7, PT_SPECK = 8, PT_GRING = 9;
   var pool = [];
   (function () {
     for (var i = 0; i < CAP; i++) {
@@ -2710,7 +2925,7 @@
     var k = clamp(speed / 780, 0, 1);
     spawnP(PT_PUFF, x - 9, y + 2,
       -30 - Math.random() * 60 * k, -8 - Math.random() * 24,
-      0.35 + Math.random() * 0.25, 1.6 + Math.random() * 2.2 * k,
+      0.35 + Math.random() * 0.25, 2 + Math.random() * 2.8 * k,
       '142,162,202', -30, 2.5, 0, 0);
     if (k > 0.6 && !lite() && Math.random() < 0.4) {
       spawnP(PT_SPARK, x - 10, y + 8, -120 - Math.random() * 180, -20 - Math.random() * 40,
@@ -2724,16 +2939,18 @@
     for (i = 0; i < n; i++) {
       var dir = i < n / 2 ? -1 : 1;
       spawnP(PT_PUFF, x + dir * 4, y + 2,
-        dir * (40 + Math.random() * (hard ? 130 : 70)), -10 - Math.random() * 34,
-        0.4 + Math.random() * 0.22, 2 + Math.random() * (hard ? 3.6 : 2.4),
+        dir * (40 + Math.random() * (hard ? 140 : 80)), -10 - Math.random() * 34,
+        0.4 + Math.random() * 0.22, 2.6 + Math.random() * (hard ? 4.6 : 3),
         '152,172,212', -40, 2.5, 0, 0);
     }
     for (i = 0; i < ns; i++) {
       spawnP(PT_SPARK, x, y,
-        (Math.random() - 0.5) * (hard ? 360 : 220), -40 - Math.random() * 110,
-        0.3, 1.5, '92,233,255', 520, 0, 0, 0);
+        (Math.random() - 0.5) * (hard ? 380 : 230), -40 - Math.random() * 110,
+        0.3, 2, '92,233,255', 520, 0, 0, 0);
     }
-    if (hard) spawnP(PT_RING, x, y + 2, 0, 0, 0.34, 8, '226,250,255', 0, 0, 0, 0);
+    // dust ring hugging the ground — the AAA landing read
+    spawnP(PT_GRING, x, y + 6, 0, 0, hard ? 0.42 : 0.3, hard ? 13 : 9, '215,235,255', 0, 0, 0, 0);
+    if (hard) spawnP(PT_RING, x, y + 2, 0, 0, 0.34, 9, '226,250,255', 0, 0, 0, 0);
   };
 
   ART3.fxCrash = function (x, y, vx, vy) {
@@ -2763,18 +2980,26 @@
   };
 
   ART3.fxStar = function (x, y) {
+    // gem shatter: facet shards + sparks + twinkles (same total count as V4)
     x = num(x, 0); y = num(y, 0);
-    var i, ns = pCount(12), nt = pCount(5);
+    var i, ns = pCount(8), nt = pCount(5), nf = pCount(4);
     for (i = 0; i < ns; i++) {
-      var a = (i / ns) * TAU, sp = 70 + Math.random() * 140;
+      var a = (i / ns) * TAU, sp = 80 + Math.random() * 150;
       spawnP(PT_SPARK, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 30,
-        0.4 + Math.random() * 0.2, 1.6, '255,210,74', 250, 1.2, 0, 0);
+        0.4 + Math.random() * 0.2, 2.2, '255,210,74', 250, 1.2, 0, 0);
+    }
+    for (i = 0; i < nf; i++) {   // spinning gem facets
+      var fa = Math.random() * TAU, fs = 60 + Math.random() * 130;
+      spawnP(PT_DEBRIS, x, y, Math.cos(fa) * fs, Math.sin(fa) * fs - 80,
+        0.5 + Math.random() * 0.3, 2.6 + Math.random() * 1.6,
+        Math.random() < 0.5 ? '255,210,74' : '255,244,200',
+        460, 0.6, Math.random() * TAU, (Math.random() - 0.5) * 16);
     }
     for (i = 0; i < nt; i++) {
-      spawnP(PT_TWK, x + (Math.random() - 0.5) * 28, y + (Math.random() - 0.5) * 28,
-        0, -18, 0.5 + Math.random() * 0.3, 2.5, '255,242,204', -10, 0, 0, 0);
+      spawnP(PT_TWK, x + (Math.random() - 0.5) * 30, y + (Math.random() - 0.5) * 30,
+        0, -18, 0.5 + Math.random() * 0.3, 3, '255,242,204', -10, 0, 0, 0);
     }
-    spawnP(PT_RING, x, y, 0, 0, 0.4, 6, '255,210,74', 0, 0, 0, 0);
+    spawnP(PT_RING, x, y, 0, 0, 0.4, 9, '255,210,74', 0, 0, 0, 0);
   };
 
   ART3.fxConfetti = function (x, y) {
@@ -2784,7 +3009,7 @@
       var sp = 170 + Math.random() * 330;
       spawnP(PT_CONF, x, y,
         Math.cos(a) * sp, Math.sin(a) * sp,
-        0.9 + Math.random() * 0.8, 2.4 + Math.random() * 2.2,
+        0.9 + Math.random() * 0.8, 3.4 + Math.random() * 3,
         CONF_COLS[(Math.random() * CONF_COLS.length) | 0],
         520, 1.4, Math.random() * TAU, (Math.random() - 0.5) * 14);
     }
@@ -2797,7 +3022,7 @@
       var sp = 220 + i * 60 + Math.random() * 120;
       spawnP(PT_CHEV, x - ca * 6, y - sa * 6,
         ca * sp, sa * sp - 40 + Math.random() * 30,
-        0.34 + Math.random() * 0.2, 7 + Math.random() * 4,
+        0.34 + Math.random() * 0.2, 9 + Math.random() * 5,
         '140,255,225', 120, 1.1, angle, (Math.random() - 0.5) * 3);
     }
     for (var j = 0, nk = pCount(8); j < nk; j++) {
@@ -2809,12 +3034,13 @@
 
   ART3.fxSpring = function (x, y) {
     x = num(x, 0); y = num(y, 0);
-    spawnP(PT_RING, x, y, 0, 0, 0.44, 12, '255,222,140', 0, 0, 0, 0);
-    spawnP(PT_RING, x, y, 0, -60, 0.6, 7, '255,244,200', 0, 0, 0, 0);
+    spawnP(PT_RING, x, y, 0, 0, 0.44, 15, '255,222,140', 0, 0, 0, 0);
+    spawnP(PT_RING, x, y, 0, -60, 0.6, 9, '255,244,200', 0, 0, 0, 0);
+    spawnP(PT_GRING, x, y + 4, 0, 0, 0.34, 11, '255,230,160', 0, 0, 0, 0);
     for (var i = 0, n = pCount(12); i < n; i++) {
-      spawnP(PT_SPARK, x + (Math.random() - 0.5) * 24, y,
+      spawnP(PT_SPARK, x + (Math.random() - 0.5) * 30, y,
         (Math.random() - 0.5) * 150, -180 - Math.random() * 260,
-        0.4 + Math.random() * 0.2, 1.7, '255,222,140', 520, 0.3, 0, 0);
+        0.4 + Math.random() * 0.2, 2.2, '255,222,140', 520, 0.3, 0, 0);
     }
   };
 
@@ -2934,8 +3160,18 @@
       } else if (p.t === PT_RING) {
         var rr = p.sz + (1 - k) * p.sz * 5.4;
         ctx.strokeStyle = 'rgba(' + p.col + ',' + (k * 0.55).toFixed(3) + ')';
-        ctx.lineWidth = 1 + k * 2.6;
+        ctx.lineWidth = 1.4 + k * 3.2;
         ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, TAU); ctx.stroke();
+      } else if (p.t === PT_GRING) {
+        // landing dust ring: flattened, hugs the ground
+        var gr = p.sz + (1 - k) * p.sz * 4.6;
+        ctx.strokeStyle = 'rgba(' + p.col + ',' + (k * 0.5).toFixed(3) + ')';
+        ctx.lineWidth = 1.6 + k * 3;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.scale(1, 0.32);
+        ctx.beginPath(); ctx.arc(0, 0, gr, 0, TAU); ctx.stroke();
+        ctx.restore();
       } else if (p.t === PT_RIB) {
         // trick sparkle ribbon: short curved tail
         a = Math.sin(k * Math.PI) * 0.85;
@@ -4295,7 +4531,7 @@ var GHOST_HZ = 20;
 var cv, ctx, DPR = Math.min(window.devicePixelRatio || 1, 2);
 var cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
 var essW = 0, essH = 0, rot = false, flipped = false;   // portrait quarter-turn presentation
-var bikeVis = 1, propVis = 1;                                     // small-screen sizing
+var bikeVis = 1, propVis = 1, padVis = 1.6;                       // small-screen sizing
 var contentCY = 380;                                              // level's content band
 // player-controlled camera (draw phase): 1 = whole level in view, up to ZOOM_MAX zoomed in
 var ZOOM_MAX = 3.2;
@@ -4640,6 +4876,7 @@ function resize(force){
   // the whole-level view is the planning view, so the markers have to read at that scale
   bikeVis = clamp(0.75 / scale, 1, 1.6);
   propVis = clamp(0.75 / scale, 1, 1.8);    // flag and stars: goal markers, no collision fairness cost
+  padVis = clamp(1.15 / scale, 1.5, 2.6);   // springs and boosts are INTERACTIONS — oversized on purpose
   ZOOM_MAX = clamp(1.6 / scale, 2, 4);      // ~3.5x on a phone, 2x on a desktop monitor
   clampUserCam();                                 // a resize can change what the camera may show
   document.body.classList.toggle('portrait', rot);
@@ -5344,8 +5581,9 @@ function windAt(x, y){
 function padsAt(x, y, grounded){
   for (var i = 0; i < obs.length; i++) {
     var o = obs[i];
-    if (o.type === 'boost' && grounded && Math.abs(x - o.x) < 30 && Math.abs(y - o.y) < 34) return o;
-    if (o.type === 'spring' && Math.abs(x - o.x) < 28 && y > o.y - 40 && y < o.y + 26) return o;
+    // triggers match the bigger V5 pad art — generous is friendly
+    if (o.type === 'boost' && grounded && Math.abs(x - o.x) < 44 && Math.abs(y - o.y) < 38) return o;
+    if (o.type === 'spring' && Math.abs(x - o.x) < 40 && y > o.y - 48 && y < o.y + 30) return o;
   }
   return null;
 }
@@ -5551,6 +5789,7 @@ function render(t, dt){
   camView2.x = v.x0 + v.vw / 2; camView2.y = v.y0 + v.vh / 2; camView2.zoom = cam.zoom;
   skyFill(th);
   ART3.drawBackground(ctx, camView2, W, H, th, t);
+  bgDim();
   if (L) {
     // one horizon silhouette per level — the country's quiet signature
     if (L.landmark && ART3.drawLandmark) {
@@ -5566,8 +5805,8 @@ function render(t, dt){
     inkFloor();                                  // keep the road legible at whole-level zoom
     if (phase === 'draw' && !el.onboard.hidden) ghostRoute(t);
     for (i = 0; i < obs.length; i++) { o = obs[i];
-      if (o.type === 'boost') ART3.drawBoost(ctx, o.x, o.y, o.angle, t);
-      else if (o.type === 'spring') ART3.drawSpring(ctx, o.x, o.y, t, o.fired || 0); }
+      if (o.type === 'boost') drawScaled(ART3.drawBoost, padVis, o.x, o.y, [o.x, o.y, o.angle, t]);
+      else if (o.type === 'spring') drawScaled(ART3.drawSpring, padVis, o.x, o.y, [o.x, o.y, t, o.fired || 0]); }
     for (i = 0; i < obs.length; i++) { o = obs[i];
       if (o.type === 'saw') ART3.drawSaw(ctx, o.x, o.y, o.r, t);
       else if (o.type === 'block') ART3.drawBlock(ctx, o.x, o.y, o.w, o.h, th, t, !!o.osc); }
@@ -5624,13 +5863,14 @@ var camView2 = { x: 0, y: 0, zoom: 1 };
 // outdoors. This re-strokes the same polyline at a minimum on-screen width — legibility only,
 // it never changes where the road is.
 function inkFloor(){
+  // The road is the hero and must read like "Rider": a hot core inside a big soft glow. The art
+  // layer draws its own version; this overlay guarantees the read at every zoom on every device.
+  if (!ys) return;
   var px = scale * cam.zoom;
-  var want = 2.6 / px;                       // world units that render as 2.6 CSS px
-  if (want <= 2.4 || !ys) return;
+  var core = Math.max(5, 3.4 / px);          // ≥3.4 CSS px hot core
+  var glow = core * 3.2, halo = core * 6.5;
   ctx.save();
   ctx.lineJoin = ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(226,250,255,0.92)';
-  ctx.lineWidth = want;
   ctx.beginPath();
   var pen = false;
   for (var i = 0; i < cols; i++) {
@@ -5638,8 +5878,29 @@ function inkFloor(){
     if (y !== y) { pen = false; continue; }
     if (pen) ctx.lineTo(i * DX, y); else { ctx.moveTo(i * DX, y); pen = true; }
   }
-  ctx.stroke();
+  ctx.strokeStyle = 'rgba(80,210,255,0.16)';  ctx.lineWidth = halo; ctx.stroke();
+  ctx.strokeStyle = 'rgba(120,230,255,0.38)'; ctx.lineWidth = glow; ctx.stroke();
+  ctx.strokeStyle = 'rgba(238,252,255,0.95)'; ctx.lineWidth = core; ctx.stroke();
   ctx.restore();
+}
+// dusk-black wash + edge shading over the background so the neon play layer pops (cached per theme+size)
+var bgDimC = null, bgDimKey = '';
+function bgDim(){
+  var key = cssW + 'x' + cssH;
+  if (bgDimKey !== key || !bgDimC) {
+    bgDimC = document.createElement('canvas');
+    bgDimC.width = 64; bgDimC.height = 64;
+    var g = bgDimC.getContext('2d');
+    var grad = g.createLinearGradient(0, 0, 0, 64);
+    grad.addColorStop(0, 'rgba(5,4,16,0.42)');
+    grad.addColorStop(0.42, 'rgba(5,4,16,0.16)');
+    grad.addColorStop(0.75, 'rgba(5,4,16,0.05)');
+    grad.addColorStop(1, 'rgba(5,4,16,0.30)');
+    g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+    bgDimKey = key;
+  }
+  var v = camView();
+  ctx.drawImage(bgDimC, v.x0, v.y0, v.vw, v.vh);
 }
 // First-run demo: traces the shape of a workable road so the idea lands without words.
 function ghostRoute(t){
