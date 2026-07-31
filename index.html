@@ -3477,6 +3477,8 @@ var PLAT0_X1 = 170, PLATF_PAD = 40;
 var STAR_R = 30;
 var AIR_ROT = 7.0;           // rad/s air control (a full flip in ~0.9s of held input)
 var LAND_SNAP = 26;          // how far below a surface still counts as touching down on it
+var WHEELBASE = 30;          // front/rear contact spread the chassis pitches across
+var SUSP_K = 220, SUSP_C = 13;   // suspension spring and damping
 var BRIDGE_GAP = 90;         // start/finish gap auto-closed at launch (drawing from the exact lip is fiddly)
 var BRIDGE_DY = 55;          // ...only if the drawn end is roughly level with the ledge
 var MICRO_GAP = 16;          // pen-jitter holes closed anywhere
@@ -3497,6 +3499,7 @@ var userZoom = 1, userCamX = W / 2, userCamY = 380;
 var ptrs = {}, ptrCount = 0, gesture = null;                      // multi-touch pinch/pan state
 var lastSig = '';                                       // viewport + visible-band signature
 var paused = false, lastTapT = 0, lastCrashT = -9, tapStart = null, seenAir = false, forceW = 0, forceH = 0;
+var susp = 0, suspV = 0, squash = 0, airT = 0, airBest = 0;   // chassis bounce + hang time
 var cam = { x: W / 2, y: H / 2, zoom: 1 };
 var camTargetZoom = ZOOM_DRAW;
 var ys = null, cols = 0;
@@ -3956,6 +3959,7 @@ function resetBike(){
   for (var i = 0; i < stars.length; i++) stars[i].got = false;
   for (i = 0; i < obs.length; i++) if (obs[i].fired !== undefined) obs[i].fired = 0;
   rideT = 0; lean = 0; leanInput = 0; spinAcc = 0; flips = 0; trickScore = 0;
+  susp = 0; suspV = 0; squash = 0; airT = 0; airBest = 0;
   ghostRec = null; ghostT = 0; ghostAcc = 0;
   AUDIO3.wind(false);
   if (el.starrow) updateStarRow();   // stars were just un-collected: clear the pips too
@@ -4478,6 +4482,11 @@ function physStep(dt){
   var b = bike;
   if (b.state !== 'ride') return;
   rideT += dt;
+  // damped spring: the chassis rides above the contact point and settles after every hit
+  suspV += (-susp * SUSP_K - suspV * SUSP_C) * dt;
+  susp = clamp(susp + suspV * dt, -26, 26);
+  squash = Math.max(0, squash - dt * 4.5);
+  if (b.airborne) { airT += dt; susp *= Math.max(0, 1 - dt * 2.2); }
 
   if (!b.airborne) {
     var m = groundSlope(b.x), n = Math.sqrt(1 + m * m);
@@ -4496,7 +4505,14 @@ function physStep(dt){
       else if (gy < b.y - STEP_HOP) { fail('crash'); return; }
       else {
         if (gy < b.y - 7) b.speed *= 0.93;
-        b.x = nx; b.y = gy; b.angle = Math.atan2(m, 1); b.dist += b.speed * dt;
+        var prevGy = b.y;
+        b.x = nx; b.y = gy; b.dist += b.speed * dt;
+        // Pitch across BOTH wheels rather than lying flat on the local slope — this is what
+        // makes a bike read as a bike over bumps and crests instead of a sticker on the ground.
+        var yR = groundY(b.x - WHEELBASE / 2), yF = groundY(b.x + WHEELBASE / 2);
+        b.angle = (yR === yR && yF === yF) ? Math.atan2(yF - yR, WHEELBASE) : Math.atan2(m, 1);
+        // suspension takes the hit of whatever the ground just did
+        suspV += clamp((gy - prevGy) * 3.2, -260, 260);
         b.lean = lerp(b.lean, clamp(-m * 1.6, -1, 1), Math.min(1, dt * 8));
         if (b.speed > 260 && Math.random() < 0.4) ART3.fxDust(b.x - 15, b.y, b.speed);
       }
@@ -4578,6 +4594,18 @@ function physStep(dt){
         else { b.y = g; fail('crash'); return; }
       }
       landFlips();
+      // hang time pays out on any touchdown you walk away from, so committing to a big jump is
+      // always worth it — a scrappy landing just earns less of it
+      if (airT > 0.5) {
+        var airPts = Math.round(airT * 140 * (scrappy ? 0.6 : 1));
+        trickScore += airPts;
+        trickPop('AIR ' + airT.toFixed(1) + 's  +' + airPts);
+        if (airT > airBest) airBest = airT;
+      }
+      airT = 0;
+      // the suspension eats the landing: compress hard, then rebound
+      var impact = clamp(Math.abs(b.vy) * 0.055, 0, 22);
+      susp = impact; suspV = 0; squash = clamp(impact / 22, 0, 1);
       b.airborne = false; b.y = g; b.speed = Math.max(fwd, 45); b.angle = slopeAng; spinAcc = 0;
       var hard = vmag > 480;
       if (scrappy) {
@@ -4674,11 +4702,17 @@ function render(t, dt){
       bikeProxy.x = bike.x; bikeProxy.y = bike.y - 12; bikeProxy.angle = bike.angle; bikeProxy.speed = bike.speed;
       bikeProxy.airborne = bike.airborne; bikeProxy.state = bike.state; bikeProxy.crashT = bike.crashT;
       bikeProxy.dist = bike.dist; bikeProxy.flips = bike.flips; bikeProxy.lean = bike.lean;
-      if (bikeVis > 1.01) {                       // scale about the rider so it grows in place
+      // The chassis rides on its suspension and squashes into a hard landing, so the bike reacts
+      // to the ground instead of being pasted onto it.
+      var ride = (bike.state === 'ride' || bike.state === 'win') ? susp : 0;
+      var sq = (bike.state === 'ride') ? squash : 0;
+      bikeProxy.y -= ride * 0.55;
+      var sx = bikeVis * (1 + sq * 0.16), sy = bikeVis * (1 - sq * 0.20);
+      if (sx !== 1 || sy !== 1) {
         ctx.save();
-        ctx.translate(bikeProxy.x, bikeProxy.y);
-        ctx.scale(bikeVis, bikeVis);
-        ctx.translate(-bikeProxy.x, -bikeProxy.y);
+        ctx.translate(bikeProxy.x, bikeProxy.y + 12);      // squash about the contact patch
+        ctx.scale(sx, sy);
+        ctx.translate(-bikeProxy.x, -(bikeProxy.y + 12));
         ART3.drawBike(ctx, bikeProxy, t);
         ctx.restore();
       } else {
