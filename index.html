@@ -3659,7 +3659,7 @@ function buildDOM(){
      '<div id="hint"></div>' +
      '<div id="leanL" class="leanpad"></div><div id="leanR" class="leanpad"></div>' +
      '<div id="coach">hold either side to spin</div>' +
-     '<div id="onboard"><div class="hand"></div><div class="say">draw a road to the flag</div></div>' +
+     '<div id="onboard"><div class="say">draw a road to the flag</div></div>' +
      // inside the HUD so they inherit the orientation transform and the HUD's safe-area box
      // instead of being separately rotated into the screen corner
      '<button id="fsBtn">⛶</button><button id="flipBtn">⇅</button>' +
@@ -3730,7 +3730,8 @@ function buildDOM(){
     '#onboard,#coach,#rotate,#trickpop,#toast{pointer-events:none!important}' +
     '#installTip{pointer-events:auto}' +
     // zoom controls: one-handed alternative to pinch, mid-right edge, clear of the thumb arcs
-    '#zoombar{position:absolute;right:max(var(--sr),12px);top:50%;transform:translateY(-50%);' +
+    // left edge: the right side belongs to GO and to the drawing hand
+    '#zoombar{position:absolute;left:max(var(--sl),12px);top:50%;transform:translateY(-50%);' +
       'display:flex;flex-direction:column;gap:8px;z-index:7;pointer-events:none}' +
     '#zoombar button{pointer-events:auto;width:48px;height:48px;min-width:48px;min-height:48px;' +
       'border-radius:14px;border:1px solid rgba(122,230,255,.22);background:rgba(10,10,26,.62);' +
@@ -3815,9 +3816,10 @@ function resize(force){
   // The whole level has to stay visible while drawing, which caps how large the world can be
   // rendered — so on a small screen the RIDER is drawn larger instead, targeting a readable
   // on-screen size without ballooning on a desktop monitor.
-  // the camera now carries most of the zoom, so these only top the rider up to a readable size
-  bikeVis = clamp(0.68 / scale, 1, 1.35);
-  propVis = clamp(0.62 / scale, 1, 1.25);   // flag and stars: goal markers, no collision fairness cost
+  // the whole-level view is the planning view, so the markers have to read at that scale
+  bikeVis = clamp(0.75 / scale, 1, 1.6);
+  propVis = clamp(0.75 / scale, 1, 1.8);    // flag and stars: goal markers, no collision fairness cost
+  ZOOM_MAX = clamp(1.6 / scale, 2, 4);      // ~3.5x on a phone, 2x on a desktop monitor
   clampUserCam();                                 // a resize can change what the camera may show
   document.body.classList.toggle('portrait', rot);
   document.body.classList.toggle('flip', rot && flipped);
@@ -3876,7 +3878,7 @@ function updateCamera(dt){
   // route you cannot see) and only moves when they pinch, drag with two fingers, or use the zoom
   // buttons. Nothing auto-zooms under their hands. RIDE phase: the camera follows the bike.
   if (phase === 'ride' && bike) {
-    var tz = Math.max(camTargetZoom, userZoom);
+    var tz = camTargetZoom;      // fixed: riding at the player's 3.5x draw zoom is unwatchable
     var tx = bike.x + clamp(bike.vx || 0, -260, 260) * 0.35;
     var ty = bike.y - 40;
     cam.zoom = lerp(cam.zoom, tz, Math.min(1, dt * 4.5));
@@ -4085,21 +4087,22 @@ function bindInput(){
       curStroke = null; activePtr = null;
     }
     var m = ptrMid();
-    gesture = m ? { dist: m.dist, mid: m, camX: userCamX, camY: userCamY, zoom: userZoom } : null;
+    // Anchor the world point under the fingers. Everything is solved against this anchor each
+    // frame, so that point stays pinned under the midpoint instead of sliding away.
+    gesture = m ? { dist: m.dist, zoom: userZoom, anchor: screenToWorld(m.x, m.y) } : null;
     updateButtons();
   }
   function moveGesture(){
-    if (!gesture) return;
+    if (!gesture || !gesture.anchor) return;
     var m = ptrMid();
     if (!m) return;
-    if (gesture.dist > 20 && m.dist > 20) setZoom(gesture.zoom * (m.dist / gesture.dist), null);
-    // pan by the movement of the two-finger midpoint, in world units at the current zoom
-    var k = 1 / (scale * userZoom);
-    var dx = (m.x - gesture.mid.x) * k, dy = (m.y - gesture.mid.y) * k;
-    if (rot) { var t2 = dx; dx = dy; dy = -t2; }     // the view is a quarter turn round
-    if (rot && flipped) { dx = -dx; dy = -dy; }
-    userCamX = gesture.camX - dx; userCamY = gesture.camY - dy;
+    if (gesture.dist > 20 && m.dist > 20) userZoom = clamp(gesture.zoom * (m.dist / gesture.dist), 1, ZOOM_MAX);
+    // place the camera so the anchor lands back under the current midpoint
+    var p = toEss(m.x, m.y), z = scale * userZoom;
+    userCamX = gesture.anchor.x - (p.x - offX) / z + (W / userZoom) / 2;
+    userCamY = gesture.anchor.y - (p.y - offY) / z + (H / userZoom) / 2;
     clampUserCam();
+    cam.zoom = userZoom; cam.x = userCamX; cam.y = userCamY;   // 1:1 with the fingers, no lag
   }
 
   cv.addEventListener('pointerdown', function(e){
@@ -4134,7 +4137,9 @@ function bindInput(){
   });
   function up(e){
     if (ptrs[e.pointerId]) { delete ptrs[e.pointerId]; ptrCount = Math.max(0, ptrCount - 1); }
-    if (gesture) { if (ptrCount < 2) { gesture = null; tapStart = null; } else { gesture = null; beginGesture(); } return; }
+    // lifting out of a pinch ends the camera gesture; a surviving finger does nothing until it
+    // is lifted and pressed again, so you never accidentally draw out of a pinch
+    if (gesture) { if (ptrCount < 2) { gesture = null; tapStart = null; } return; }
     if (phase === 'ride') { leanInput = 0; return; }
     if (e.pointerId !== activePtr) return;
     activePtr = null;
@@ -4178,7 +4183,8 @@ function bindInput(){
       if (!m && L) AUDIO3.musicStart(L.theme | 0); else AUDIO3.musicStop();
       toast(m ? 'sound off' : 'sound on', 900);});
   bindTap(el.btnMenu, openSelect);
-  bindTap(el.btnPlay, openSelect);
+  // RIDE goes straight into the game — a new player should not meet a menu grid first
+  bindTap(el.btnPlay, function(){ loadLevel(clamp(save.unlocked, 0, window.LEVELS3.length - 1)); });
   bindTap(el.btnBack, showTitle);
   bindTap(el.btnNext, function(){ loadLevel(li + 1); });
   bindTap(el.btnReplay, function(){ loadLevel(li); });
@@ -4292,6 +4298,11 @@ function startRide(){
   resetBike();
   bike.state = 'ride'; phase = 'ride'; rideT = 0; attempts++;
   camTargetZoom = ZOOM_RIDE;
+  // audio starts off, so say so once — otherwise players assume the game is broken/silent
+  if (AUDIO3.muted && !save.audioTip) {
+    toast('sound is off — ♪ to turn it on', 1800);
+    save.audioTip = 1; persist();
+  }
   ghostRec = [];
   AUDIO3.go(); AUDIO3.engineStart();
   el.hint.hidden = true;
@@ -4571,6 +4582,8 @@ function render(t, dt){
       else if (o.type === 'wind') ART3.drawWind(ctx, o.x0, o.y0, o.x1, o.y1, o.ax, t); }
     ART3.drawPlatforms(ctx, plats, th, t);
     ART3.drawTerrain(ctx, ys, DX, W, H, th, strokeDirty); strokeDirty = false;
+    inkFloor();                                  // keep the road legible at whole-level zoom
+    if (phase === 'draw' && !el.onboard.hidden) ghostRoute(t);
     for (i = 0; i < obs.length; i++) { o = obs[i];
       if (o.type === 'boost') ART3.drawBoost(ctx, o.x, o.y, o.angle, t);
       else if (o.type === 'spring') ART3.drawSpring(ctx, o.x, o.y, t, o.fired || 0); }
@@ -4619,6 +4632,56 @@ function render(t, dt){
 }
 var bikeProxy = { x:0, y:0, angle:0, speed:0, airborne:false, state:'idle', crashT:0, dist:0, flips:0, lean:0 };
 var camView2 = { x: 0, y: 0, zoom: 1 };
+// At whole-level zoom on a phone the art's road core lands near 1 CSS px, which is a hairline
+// outdoors. This re-strokes the same polyline at a minimum on-screen width — legibility only,
+// it never changes where the road is.
+function inkFloor(){
+  var px = scale * cam.zoom;
+  var want = 2.6 / px;                       // world units that render as 2.6 CSS px
+  if (want <= 2.4 || !ys) return;
+  ctx.save();
+  ctx.lineJoin = ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(226,250,255,0.92)';
+  ctx.lineWidth = want;
+  ctx.beginPath();
+  var pen = false;
+  for (var i = 0; i < cols; i++) {
+    var y = ys[i];
+    if (y !== y) { pen = false; continue; }
+    if (pen) ctx.lineTo(i * DX, y); else { ctx.moveTo(i * DX, y); pen = true; }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+// First-run demo: traces the shape of a workable road so the idea lands without words.
+function ghostRoute(t){
+  if (!plats.length) return;
+  var x0 = plats[0].x1, y0 = plats[0].y, x1 = Math.min(x0 + 520, flag.x - 40);
+  var loop = (t % 2.9) / 1.9;
+  var prog = clamp(loop, 0, 1);
+  var alpha = loop < 1 ? 0.42 : clamp(1 - (loop - 1) * 2.2, 0, 1) * 0.42;
+  if (alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#eaf7ff';
+  ctx.lineWidth = Math.max(3, 3.2 / (scale * cam.zoom));
+  ctx.setLineDash([Math.max(8, 9 / (scale * cam.zoom)), Math.max(8, 9 / (scale * cam.zoom))]);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  var n = Math.max(2, Math.round(28 * prog));
+  for (var i = 0; i <= n; i++) {
+    var f = (i / 28), xx = x0 + (x1 - x0) * f, yy = y0 + 26 - Math.sin(f * Math.PI) * 34;
+    if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+  }
+  ctx.stroke();
+  // the fingertip leading the line
+  var ff = prog, fx = x0 + (x1 - x0) * ff, fy = y0 + 26 - Math.sin(ff * Math.PI) * 34;
+  ctx.setLineDash([]);
+  ctx.globalAlpha = alpha * 1.6;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(fx, fy, Math.max(5, 6 / (scale * cam.zoom)), 0, 6.28318); ctx.fill();
+  ctx.restore();
+}
 // draws an art function scaled about a world anchor, so props read larger on a small screen
 // without moving where they actually are
 function drawScaled(fn, k, ax, ay, args){
