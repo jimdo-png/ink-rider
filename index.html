@@ -1115,6 +1115,397 @@
     }
   };
 
+  /* -------------------------------------------------------------- landmarks
+
+     ART3.drawLandmark(ctx, kind, x, baseY, themeIdx, t) — V4 country flavour.
+     16 horizon silhouettes, one colour each (the theme's far hill, darkened),
+     sitting ON baseY, blitted through a soft atmospheric alpha so they read
+     as distant. Each (kind, themeIdx) is rendered ONCE to an offscreen canvas
+     and cached — FIFO, capped at 24 entries (a level touches 1-3 combos).
+     Only the windmill sails and the ferris spokes/cabins are live (≤0.15
+     rad/s), drawn as a handful of strokes over the cached body.
+     Unknown kinds draw nothing, silently. */
+
+  var LM_COL = [];
+  function lmColor(idx) {                    // far-hill colour, pulled darker
+    var v = LM_COL[idx];
+    if (!v) {
+      var n = parseInt(T(idx).hillFar.slice(1), 16);
+      v = LM_COL[idx] = 'rgb(' + ((((n >> 16) & 255) * 0.74) | 0) + ',' +
+        ((((n >> 8) & 255) * 0.74) | 0) + ',' + (((n & 255) * 0.74) | 0) + ')';
+    }
+    return v;
+  }
+  function lmPunch(g) { g.globalCompositeOperation = 'destination-out'; }
+  function lmSolid(g) { g.globalCompositeOperation = 'source-over'; }
+  function lmArch(g, x, y, r) {              // round-top slot, used punched
+    g.beginPath();
+    g.moveTo(x - r, y + r * 1.6);
+    g.lineTo(x - r, y);
+    g.arc(x, y, r, Math.PI, TAU);
+    g.lineTo(x + r, y + r * 1.6);
+    g.closePath(); g.fill();
+  }
+  function lmShell(g, xa, xb, gy, yTop) {    // opera sail: peak near the nose xb
+    var pk = xa + (xb - xa) * 0.80;
+    g.beginPath();
+    g.moveTo(xa, gy);
+    g.quadraticCurveTo(xa + (xb - xa) * 0.30, yTop + (gy - yTop) * 0.10, pk, yTop);
+    g.quadraticCurveTo(pk + (xb - pk) * 0.85, yTop + (gy - yTop) * 0.35, xb, gy);
+    g.closePath(); g.fill();
+  }
+
+  function lmTorii(g, w, h) {
+    var cx = w / 2;
+    g.beginPath();                                          // pillars, leaning in
+    g.moveTo(cx - 52, h); g.lineTo(cx - 40, h);
+    g.lineTo(cx - 34, h * 0.24); g.lineTo(cx - 45, h * 0.24);
+    g.closePath(); g.fill();
+    g.beginPath();
+    g.moveTo(cx + 52, h); g.lineTo(cx + 40, h);
+    g.lineTo(cx + 34, h * 0.24); g.lineTo(cx + 45, h * 0.24);
+    g.closePath(); g.fill();
+    g.fillRect(cx - 56, h * 0.34, 112, 9);                  // nuki tie beam
+    g.fillRect(cx - 4, h * 0.16, 8, h * 0.20);              // centre strut
+    g.beginPath();                                          // kasagi, ends swept up
+    g.moveTo(cx - 72, h * 0.10);
+    g.quadraticCurveTo(cx, h * 0.20, cx + 72, h * 0.10);
+    g.lineTo(cx + 66, h * 0.235);
+    g.quadraticCurveTo(cx, h * 0.30, cx - 66, h * 0.235);
+    g.closePath(); g.fill();
+  }
+
+  function lmPagoda(g, w, h) {
+    var cx = w / 2, i, y, ry, bw, rw;
+    for (i = 0; i < 4; i++) {
+      y = h - i * (h * 0.215);
+      bw = 24 - i * 4;
+      rw = 52 - i * 9;
+      ry = y - h * 0.215;
+      g.fillRect(cx - bw, ry, bw * 2, h * 0.215);           // storey
+      g.beginPath();                                        // flared roof, tips up
+      g.moveTo(cx - rw, ry + 4);
+      g.quadraticCurveTo(cx - rw * 0.45, ry - 10, cx, ry - 12);
+      g.quadraticCurveTo(cx + rw * 0.45, ry - 10, cx + rw, ry + 4);
+      g.quadraticCurveTo(cx + rw * 0.5, ry - 2, cx, ry - 1);
+      g.quadraticCurveTo(cx - rw * 0.5, ry - 2, cx - rw, ry + 4);
+      g.closePath(); g.fill();
+    }
+    g.fillRect(cx - 1.5, h * 0.045, 3, h * 0.10);           // finial
+    g.beginPath(); g.arc(cx, h * 0.045, 4, 0, TAU); g.fill();
+  }
+
+  function lmPyramid(g, w, h) {
+    g.beginPath();
+    g.moveTo(w * 0.10, h); g.lineTo(w * 0.56, h * 0.03); g.lineTo(w * 0.98, h);
+    g.closePath(); g.fill();
+    g.beginPath();                                          // small companion
+    g.moveTo(0, h); g.lineTo(w * 0.20, h * 0.55); g.lineTo(w * 0.42, h);
+    g.closePath(); g.fill();
+  }
+
+  function lmEiffel(g, w, h) {
+    var cx = w / 2;
+    g.beginPath();
+    g.moveTo(cx - w * 0.46, h);
+    g.quadraticCurveTo(cx - w * 0.15, h * 0.40, cx - w * 0.045, h * 0.09);
+    g.lineTo(cx, h * 0.015);
+    g.lineTo(cx + w * 0.045, h * 0.09);
+    g.quadraticCurveTo(cx + w * 0.15, h * 0.40, cx + w * 0.46, h);
+    g.closePath(); g.fill();
+    lmPunch(g);                                             // base arch
+    g.beginPath(); g.arc(cx, h + 3, w * 0.155, Math.PI, TAU); g.fill();
+    lmSolid(g);
+    g.fillRect(cx - w * 0.30, h * 0.555, w * 0.60, 7);      // two decks
+    g.fillRect(cx - w * 0.175, h * 0.30, w * 0.35, 6);
+    g.fillRect(cx - 1.2, 0, 2.4, h * 0.03);                 // antenna
+  }
+
+  function lmBigBen(g, w, h) {
+    var cx = w / 2;
+    g.fillRect(cx - 13, h * 0.30, 26, h * 0.70);            // shaft
+    g.fillRect(cx - 17, h * 0.165, 34, h * 0.145);          // clock stage
+    g.fillRect(cx - 14, h * 0.135, 28, h * 0.03);           // cornice
+    g.beginPath();                                          // spire
+    g.moveTo(cx - 14, h * 0.135); g.lineTo(cx, h * 0.015); g.lineTo(cx + 14, h * 0.135);
+    g.closePath(); g.fill();
+    g.fillRect(cx - 1, 0, 2, h * 0.03);
+    lmPunch(g);                                             // clock face shows sky
+    g.beginPath(); g.arc(cx, h * 0.235, 9, 0, TAU); g.fill();
+    lmSolid(g);
+    g.beginPath(); g.arc(cx, h * 0.235, 3, 0, TAU); g.fill();
+  }
+
+  function lmWindmill(g, w, h) {
+    var cx = w / 2;
+    g.beginPath();                                          // tapered tower
+    g.moveTo(cx - 30, h); g.lineTo(cx - 14, h * 0.30);
+    g.lineTo(cx + 14, h * 0.30); g.lineTo(cx + 30, h);
+    g.closePath(); g.fill();
+    g.beginPath(); g.arc(cx, h * 0.30, 14, Math.PI, TAU); g.fill();   // cap
+    g.beginPath(); g.arc(cx, h * 0.30, 4.5, 0, TAU); g.fill();        // hub boss
+    lmPunch(g);
+    g.beginPath(); g.arc(cx, h * 0.94, 7, Math.PI, TAU); g.fill();    // doorway
+    lmSolid(g);
+  }
+  function lmWindmillLive(ctx, x, baseY, t, def) {          // 4 sails, ≤0.12 rad/s
+    var hy = baseY - def.hubUp, L = def.sail, rot = t * 0.12, i, a, ca, sa, ox, oy;
+    ctx.lineWidth = 3;
+    for (i = 0; i < 4; i++) {
+      a = rot + i * (Math.PI / 2);
+      ca = Math.cos(a); sa = Math.sin(a);
+      ctx.beginPath(); ctx.moveTo(x, hy); ctx.lineTo(x + ca * L, hy + sa * L); ctx.stroke();
+      ox = -sa * 8; oy = ca * 8;                            // lattice blade, one side
+      ctx.beginPath();
+      ctx.moveTo(x + ca * L * 0.30, hy + sa * L * 0.30);
+      ctx.lineTo(x + ca * L * 0.30 + ox, hy + sa * L * 0.30 + oy);
+      ctx.lineTo(x + ca * L + ox, hy + sa * L + oy);
+      ctx.lineTo(x + ca * L, hy + sa * L);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  function lmOpera(g, w, h) {
+    var gy = h - 8;
+    g.fillRect(w * 0.02, gy, w * 0.96, 8);                  // podium
+    lmShell(g, w * 0.04, w * 0.40, gy, h * 0.42);           // sails running right
+    lmShell(g, w * 0.16, w * 0.55, gy, h * 0.26);
+    lmShell(g, w * 0.32, w * 0.70, gy, h * 0.10);
+    lmShell(g, w * 0.97, w * 0.66, gy, h * 0.30);           // answering pair, left
+    lmShell(g, w * 0.99, w * 0.80, gy, h * 0.52);
+  }
+
+  function lmMoai(g, w, h) {
+    var cx = w / 2;
+    g.fillRect(cx - 26, h * 0.84, 52, h * 0.16);            // shoulder plinth
+    g.beginPath();                                          // profile, facing left
+    g.moveTo(cx + 16, h * 0.86);
+    g.lineTo(cx + 22, h * 0.16);
+    g.quadraticCurveTo(cx + 18, h * 0.05, cx + 2, h * 0.06);
+    g.quadraticCurveTo(cx - 12, h * 0.07, cx - 14, h * 0.20);
+    g.lineTo(cx - 15, h * 0.30);                            // forehead
+    g.lineTo(cx - 7, h * 0.335);                            // brow step
+    g.lineTo(cx - 17, h * 0.55);                            // the nose
+    g.lineTo(cx - 8, h * 0.585);
+    g.lineTo(cx - 11, h * 0.72);                            // lip shelf
+    g.lineTo(cx - 5, h * 0.75);
+    g.lineTo(cx - 6, h * 0.86);
+    g.closePath(); g.fill();
+  }
+
+  function lmCastle(g, w, h) {
+    var cx = w / 2, i, x0;
+    g.fillRect(cx - 38, h * 0.40, 76, h * 0.60);            // keep
+    for (i = 0; i < 5; i++) g.fillRect(cx - 38 + i * 17, h * 0.40 - 8, 10, 8);
+    for (i = 0; i < 2; i++) {                               // flanking towers
+      x0 = i ? cx + 48 : cx - 80;
+      g.fillRect(x0, h * 0.30, 32, h * 0.70);
+      g.beginPath();
+      g.moveTo(x0 - 5, h * 0.30); g.lineTo(x0 + 16, h * 0.055); g.lineTo(x0 + 37, h * 0.30);
+      g.closePath(); g.fill();
+    }
+    lmPunch(g);                                             // gate
+    g.beginPath();
+    g.moveTo(cx - 11, h); g.lineTo(cx - 11, h * 0.80);
+    g.arc(cx, h * 0.80, 11, Math.PI, TAU);
+    g.lineTo(cx + 11, h);
+    g.closePath(); g.fill();
+    lmSolid(g);
+  }
+
+  function lmMosque(g, w, h) {
+    var cx = w / 2, i, m;
+    g.fillRect(cx - 44, h * 0.56, 88, h * 0.44);            // hall
+    g.beginPath();                                          // onion dome
+    g.moveTo(cx - 40, h * 0.56);
+    g.bezierCurveTo(cx - 58, h * 0.30, cx - 14, h * 0.18, cx - 3, h * 0.10);
+    g.lineTo(cx, h * 0.065);
+    g.lineTo(cx + 3, h * 0.10);
+    g.bezierCurveTo(cx + 14, h * 0.18, cx + 58, h * 0.30, cx + 40, h * 0.56);
+    g.closePath(); g.fill();
+    g.fillRect(cx - 1.2, h * 0.025, 2.4, h * 0.05);         // finial
+    g.beginPath(); g.arc(cx, h * 0.025, 3, 0, TAU); g.fill();
+    for (i = 0; i < 2; i++) {                               // minarets
+      m = i ? cx + 82 : cx - 82;
+      g.fillRect(m - 5, h * 0.30, 10, h * 0.70);
+      g.fillRect(m - 9, h * 0.40, 18, h * 0.035);           // balcony
+      g.beginPath();
+      g.moveTo(m - 7, h * 0.30); g.lineTo(m, h * 0.155); g.lineTo(m + 7, h * 0.30);
+      g.closePath(); g.fill();
+      g.fillRect(m - 1, h * 0.115, 2, h * 0.045);
+    }
+  }
+
+  function lmColosseum(g, w, h) {
+    var x;
+    g.beginPath();                                          // broken drum
+    g.moveTo(w * 0.02, h);
+    g.lineTo(w * 0.02, h * 0.52);
+    g.lineTo(w * 0.20, h * 0.46);
+    g.lineTo(w * 0.28, h * 0.14);
+    g.quadraticCurveTo(w * 0.64, h * 0.02, w * 0.97, h * 0.12);
+    g.lineTo(w * 0.98, h);
+    g.closePath(); g.fill();
+    lmPunch(g);                                             // two arcades
+    for (x = w * 0.06; x < w * 0.95; x += 15) lmArch(g, x, h * 0.66, 4.5);
+    for (x = w * 0.33; x < w * 0.93; x += 15) lmArch(g, x, h * 0.36, 4.5);
+    lmSolid(g);
+  }
+
+  function lmStatue(g, w, h) {
+    var cx = w / 2 - 6, i, a;
+    g.fillRect(cx - 30, h * 0.86, 60, h * 0.14);            // base slab
+    g.fillRect(cx - 22, h * 0.70, 44, h * 0.16);            // pedestal
+    g.fillRect(cx - 26, h * 0.68, 52, h * 0.035);           // cornice
+    g.beginPath();                                          // robe
+    g.moveTo(cx - 15, h * 0.70); g.lineTo(cx - 9, h * 0.40);
+    g.lineTo(cx + 9, h * 0.40); g.lineTo(cx + 16, h * 0.70);
+    g.closePath(); g.fill();
+    g.fillRect(cx - 8, h * 0.335, 16, h * 0.09);            // torso
+    g.fillRect(cx - 16, h * 0.365, 9, h * 0.035);           // tablet arm
+    g.beginPath(); g.arc(cx, h * 0.305, 7, 0, TAU); g.fill();
+    g.lineWidth = 2;                                        // crown spikes
+    g.beginPath();
+    for (i = 0; i < 5; i++) {
+      a = -Math.PI / 2 + (i - 2) * 0.38;
+      g.moveTo(cx + Math.cos(a) * 7, h * 0.305 + Math.sin(a) * 7);
+      g.lineTo(cx + Math.cos(a) * 13, h * 0.305 + Math.sin(a) * 13);
+    }
+    g.stroke();
+    g.lineWidth = 5;                                        // torch arm
+    g.beginPath(); g.moveTo(cx + 6, h * 0.38); g.lineTo(cx + 22, h * 0.16); g.stroke();
+    g.fillRect(cx + 19, h * 0.10, 7, h * 0.045);
+    g.beginPath(); g.arc(cx + 22.5, h * 0.085, 5, 0, TAU); g.fill();
+  }
+
+  function lmCactus(g, w, h) {
+    var cx = w / 2;
+    g.lineWidth = 20;                                       // saguaro trunk
+    g.beginPath(); g.moveTo(cx, h); g.lineTo(cx, h * 0.14); g.stroke();
+    g.lineWidth = 13;
+    g.beginPath();
+    g.moveTo(cx - 2, h * 0.52); g.lineTo(cx - 24, h * 0.48); g.lineTo(cx - 24, h * 0.26);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(cx + 2, h * 0.66); g.lineTo(cx + 24, h * 0.62); g.lineTo(cx + 24, h * 0.40);
+    g.stroke();
+  }
+
+  function lmIceberg(g, w, h) {
+    g.beginPath();
+    g.moveTo(0, h);
+    g.lineTo(w * 0.10, h * 0.58); g.lineTo(w * 0.26, h * 0.30);
+    g.lineTo(w * 0.36, h * 0.52); g.lineTo(w * 0.55, h * 0.05);
+    g.lineTo(w * 0.68, h * 0.40); g.lineTo(w * 0.84, h * 0.28);
+    g.lineTo(w * 0.95, h * 0.62); g.lineTo(w, h);
+    g.closePath(); g.fill();
+  }
+
+  function lmMountain(g, w, h) {
+    g.beginPath();
+    g.moveTo(0, h);
+    g.lineTo(w * 0.20, h * 0.44); g.lineTo(w * 0.28, h * 0.52);
+    g.lineTo(w * 0.46, h * 0.04); g.lineTo(w * 0.52, h * 0.14);
+    g.lineTo(w * 0.60, h * 0.10); g.lineTo(w * 0.78, h * 0.48);
+    g.lineTo(w * 0.86, h * 0.42); g.lineTo(w, h);
+    g.closePath(); g.fill();
+  }
+
+  function lmFerris(g, w, h) {
+    var cx = w / 2, hy = h * 0.42, R = 60;
+    g.lineWidth = 5;
+    g.beginPath(); g.arc(cx, hy, R, 0, TAU); g.stroke();    // rim
+    g.lineWidth = 2.5;
+    g.beginPath(); g.arc(cx, hy, R - 7, 0, TAU); g.stroke();
+    g.lineWidth = 6;                                        // A-frame
+    g.beginPath();
+    g.moveTo(cx - 34, h); g.lineTo(cx, hy); g.lineTo(cx + 34, h);
+    g.stroke();
+    g.fillRect(cx - 44, h - 6, 88, 6);
+    g.beginPath(); g.arc(cx, hy, 6, 0, TAU); g.fill();
+  }
+  function lmFerrisLive(ctx, x, baseY, t, def) {            // spokes + cabins, ≤0.10 rad/s
+    var hy = baseY - def.hubUp, R = def.rad, rot = t * 0.10, i, a;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (i = 0; i < 8; i++) {
+      a = rot + i * (TAU / 8);
+      ctx.moveTo(x, hy);
+      ctx.lineTo(x + Math.cos(a) * R, hy + Math.sin(a) * R);
+    }
+    ctx.stroke();
+    for (i = 0; i < 8; i++) {
+      a = rot + i * (TAU / 8);
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * (R - 4), hy + Math.sin(a) * (R - 4) + 3, 4, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  // design boxes: w/h are the offscreen canvas size, the shape's feet sit on
+  // the bottom edge; a = atmospheric alpha; hubUp/sail/rad feed the live parts
+  var LMDEF = {
+    torii:     { w: 150, h: 150, a: 0.62, draw: lmTorii },
+    pagoda:    { w: 150, h: 230, a: 0.62, draw: lmPagoda },
+    pyramid:   { w: 260, h: 170, a: 0.55, draw: lmPyramid },
+    eiffel:    { w: 120, h: 260, a: 0.62, draw: lmEiffel },
+    bigben:    { w: 70,  h: 250, a: 0.64, draw: lmBigBen },
+    windmill:  { w: 90,  h: 190, a: 0.62, draw: lmWindmill, live: lmWindmillLive, hubUp: 133, sail: 55 },
+    opera:     { w: 240, h: 130, a: 0.58, draw: lmOpera },
+    moai:      { w: 90,  h: 150, a: 0.64, draw: lmMoai },
+    castle:    { w: 200, h: 180, a: 0.60, draw: lmCastle },
+    mosque:    { w: 200, h: 200, a: 0.60, draw: lmMosque },
+    colosseum: { w: 240, h: 120, a: 0.58, draw: lmColosseum },
+    statue:    { w: 110, h: 250, a: 0.62, draw: lmStatue },
+    cactus:    { w: 90,  h: 130, a: 0.60, draw: lmCactus },
+    iceberg:   { w: 200, h: 120, a: 0.52, draw: lmIceberg },
+    mountain:  { w: 260, h: 230, a: 0.52, draw: lmMountain },
+    ferris:    { w: 180, h: 200, a: 0.62, draw: lmFerris, live: lmFerrisLive, hubUp: 116, rad: 60 }
+  };
+
+  var lmCache = {}, lmOrder = [], LM_CAP = 24;
+  function lmSprite(kind, idx, def) {
+    var key = kind + ':' + idx;
+    if (Object.prototype.hasOwnProperty.call(lmCache, key)) return lmCache[key];
+    var c = mkCanvas(def.w, def.h);
+    var g = c.getContext && c.getContext('2d');
+    var out = null;
+    if (g) {
+      try {
+        g.fillStyle = g.strokeStyle = lmColor(idx);
+        g.lineCap = 'round'; g.lineJoin = 'round';
+        def.draw(g, def.w, def.h);
+        out = c;
+      } catch (e) { out = null; }
+    }
+    lmCache[key] = out;                       // null cached too: headless ctx
+    lmOrder.push(key);
+    if (lmOrder.length > LM_CAP) delete lmCache[lmOrder.shift()];
+    return out;
+  }
+
+  ART3.drawLandmark = function (ctx, kind, x, baseY, themeIdx, t) {
+    if (!ctx) return;
+    var def = (typeof kind === 'string' && Object.prototype.hasOwnProperty.call(LMDEF, kind))
+      ? LMDEF[kind] : null;
+    if (!def) return;                         // bogus kind: silently nothing
+    x = num(x, 0); baseY = num(baseY, 0); t = num(t, 0);
+    var idx = ti(themeIdx);
+    var c = lmSprite(kind, idx, def);
+    ctx.save();
+    ctx.globalAlpha *= def.a;
+    if (c && c.width) {
+      try { ctx.drawImage(c, x - def.w / 2, baseY - def.h); } catch (e) {}
+    }
+    if (def.live) {
+      var col = lmColor(idx);
+      ctx.strokeStyle = col; ctx.fillStyle = col;
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      def.live(ctx, x, baseY, t, def);
+    }
+    ctx.restore();
+  };
+
   /* ------------------------------------------------------------- void zones */
 
   ART3.drawZones = function (ctx, zones, H, t) {
@@ -1360,11 +1751,64 @@
 
   /* ------------------------------------------------------------------- flag */
 
-  ART3.drawFlag = function (ctx, x, y, t, reached) {
+  function flagHex(v) {                      // '#rgb' | '#rrggbb' -> [r,g,b] | null
+    if (typeof v !== 'string') return null;
+    var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(v);
+    if (!m) return null;
+    var s = m[1];
+    if (s.length === 3) s = s.charAt(0) + s.charAt(0) + s.charAt(1) + s.charAt(1) + s.charAt(2) + s.charAt(2);
+    var n = parseInt(s, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  // V4: optional `colors` — a 2-element array of hex strings turns the cloth
+  // into two horizontal country bands (wave kept). Anything else is ignored
+  // and the flag renders exactly as before. On `reached` the bands are tinted
+  // toward the celebration gold instead of being replaced by it.
+  ART3.drawFlag = function (ctx, x, y, t, reached, colors) {
     x = num(x, 0); y = num(y, 0); t = num(t, 0);
     var poleH = 60, topY = y - poleH;
     var wSpd = reached ? 11 : 6.5, amp = reached ? 6 : 3.2;
     var w1 = Math.sin(t * wSpd) * amp, w2 = Math.sin(t * wSpd + 1.5) * amp * 1.35;
+    var cw = 30, ch = 19;
+
+    var band = null;
+    if (colors && typeof colors === 'object' && typeof colors.length === 'number' && colors.length === 2) {
+      var bA = flagHex(colors[0]), bB = flagHex(colors[1]);
+      if (bA && bB) band = [bA, bB];
+    }
+
+    function cloth() {
+      ctx.beginPath();
+      ctx.moveTo(x, topY);
+      ctx.quadraticCurveTo(x + cw * 0.5, topY + w1, x + cw, topY + 3 + w2);
+      ctx.lineTo(x + cw, topY + 3 + ch + w2 * 0.7);
+      ctx.quadraticCurveTo(x + cw * 0.5, topY + ch + w1 * 0.7, x, topY + ch);
+      ctx.closePath();
+    }
+    function bands(cTop, cBot, alpha) {       // two waving bands inside the cloth
+      cloth();
+      ctx.save();
+      ctx.clip();
+      ctx.globalAlpha *= alpha;
+      ctx.fillStyle = cTop;
+      ctx.fillRect(x - 2, topY - amp - 6, cw + 6, poleH);
+      ctx.fillStyle = cBot;
+      var my = topY + ch * 0.52;              // divider follows the wave
+      ctx.beginPath();
+      ctx.moveTo(x - 2, my);
+      ctx.quadraticCurveTo(x + cw * 0.5, my + w1 * 0.85, x + cw + 3, my + 1.5 + w2 * 0.85);
+      ctx.lineTo(x + cw + 3, topY + ch + amp + 10);
+      ctx.lineTo(x - 2, topY + ch + amp + 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    function gold(c) {                        // celebration tint, keeps the country
+      var k = 0.62;
+      return 'rgb(' + ((c[0] + (255 - c[0]) * k) | 0) + ',' +
+        ((c[1] + (210 - c[1]) * k) | 0) + ',' + ((c[2] + (74 - c[2]) * k) | 0) + ')';
+    }
 
     // ground socket
     ctx.fillStyle = 'rgba(6,4,18,0.6)';
@@ -1378,29 +1822,29 @@
     ctx.strokeStyle = '#c3d1e4'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, topY); ctx.stroke();
 
-    var cw = 30, ch = 19;
-    ctx.beginPath();
-    ctx.moveTo(x, topY);
-    ctx.quadraticCurveTo(x + cw * 0.5, topY + w1, x + cw, topY + 3 + w2);
-    ctx.lineTo(x + cw, topY + 3 + ch + w2 * 0.7);
-    ctx.quadraticCurveTo(x + cw * 0.5, topY + ch + w1 * 0.7, x, topY + ch);
-    ctx.closePath();
-
     if (reached) {
       var pu = 0.5 + 0.5 * Math.sin(t * 9);
       ctx.fillStyle = 'rgba(255,210,74,' + (0.14 + 0.14 * pu).toFixed(3) + ')';
       ctx.save();
       ctx.beginPath(); ctx.arc(x + 9, topY + 9, 30 + pu * 8, 0, TAU); ctx.fill();
       ctx.restore();
-      ctx.beginPath();
-      ctx.moveTo(x, topY);
-      ctx.quadraticCurveTo(x + cw * 0.5, topY + w1, x + cw, topY + 3 + w2);
-      ctx.lineTo(x + cw, topY + 3 + ch + w2 * 0.7);
-      ctx.quadraticCurveTo(x + cw * 0.5, topY + ch + w1 * 0.7, x, topY + ch);
-      ctx.closePath();
-      ctx.fillStyle = '#ffd24a'; ctx.fill();
+      if (band) {
+        bands(gold(band[0]), gold(band[1]), 1);
+      } else {
+        cloth();
+        ctx.fillStyle = '#ffd24a'; ctx.fill();
+      }
+      cloth();
       ctx.strokeStyle = '#fff6cf'; ctx.lineWidth = 1.6; ctx.stroke();
+    } else if (band) {
+      cloth();
+      ctx.fillStyle = 'rgba(64,233,255,0.16)'; ctx.fill();   // ink halo, in-language
+      bands('rgb(' + band[0][0] + ',' + band[0][1] + ',' + band[0][2] + ')',
+        'rgb(' + band[1][0] + ',' + band[1][1] + ',' + band[1][2] + ')', 0.94);
+      cloth();
+      ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 1.3; ctx.stroke();
     } else {
+      cloth();
       ctx.fillStyle = 'rgba(64,233,255,0.18)'; ctx.fill();
       ctx.fillStyle = 'rgba(40,186,220,0.88)'; ctx.fill();
       ctx.strokeStyle = 'rgba(190,248,255,0.9)'; ctx.lineWidth = 1.4; ctx.stroke();
@@ -2021,23 +2465,67 @@
 
     if (state === 'crash') {
       var ct = Math.max(0, num(b.crashT, 0));
-      // bike cartwheels away, rider separates and tumbles
+      // V4: the engine may pass the wreck's real velocity (b.crashVX/crashVY).
+      // With it, the rider is thrown ALONG that velocity — ahead of the bike
+      // off a forward launch, backwards off a saw flick — with limb flail
+      // scaled by speed. Without it (old callers), the original tumble runs.
+      var cvx = num(b.crashVX, NaN), cvy = num(b.crashVY, NaN);
+
+      if (cvx !== cvx && cvy !== cvy) {
+        // legacy path — byte-for-byte the V3 wreck
+        ctx.save();
+        var spin0 = ct * 11 * Math.exp(-1.1 * ct);
+        var bdy0 = Math.min(-150 * ct + 300 * ct * ct, 8);
+        ctx.translate(ct * 30, bdy0);
+        ctx.rotate(ang + spin0);
+        drawBikeBody(ctx, wheelRot + ct * 30, 0, PAL, 0);
+        ctx.restore();
+
+        var rx0 = -36 * ct - 10;
+        var ry0 = Math.min(-180 * ct + 390 * ct * ct, 2);
+        var settled0 = (ry0 >= 2 && ct > 0.42);
+        ctx.save();
+        ctx.translate(rx0, ry0 - 6);
+        ctx.rotate(settled0 ? 1.72 : -ct * 9.5);
+        drawRider(ctx, settled0 ? 0 : Math.sin(ct * 14) * 0.5, 0, 0, 0, PAL);
+        ctx.restore();
+
+        ctx.restore();
+        return;
+      }
+
+      if (cvx !== cvx) cvx = 0;
+      if (cvy !== cvy) cvy = 0;
+      var cs = Math.sqrt(cvx * cvx + cvy * cvy);
+      var sn = clamp(cs / 780, 0, 1);                        // throw energy 0..1
+      var ux = cs > 1 ? cvx / cs : -1, uy = cs > 1 ? cvy / cs : 0;
+
+      // bike cartwheels, drifting with the throw but staying near the impact
       ctx.save();
-      var spin = ct * 11 * Math.exp(-1.1 * ct);
+      var spin = ct * (9 + 5 * sn) * Math.exp(-1.1 * ct) * (ux >= 0 ? 1 : -1);
       var bdy = Math.min(-150 * ct + 300 * ct * ct, 8);
-      ctx.translate(ct * 30, bdy);
+      ctx.translate(ct * (10 + 24 * ux), bdy);
       ctx.rotate(ang + spin);
       drawBikeBody(ctx, wheelRot + ct * 30, 0, PAL, 0);
       ctx.restore();
 
-      var rx = -36 * ct - 10;
-      var ry = Math.min(-180 * ct + 390 * ct * ct, 2);
+      // rider: decaying slide along the velocity, ballistic drop, then settle
+      var lv = 26 + 120 * sn;                                // local throw speed
+      var adv = (1 - Math.exp(-ct * 1.5)) / 1.5;             // slide that runs out
+      var rx = ux * lv * adv + ux * 8 - 2;
+      var ry = Math.min(uy * (80 + 180 * sn) * ct + 390 * ct * ct, 2);
       var settled = (ry >= 2 && ct > 0.42);
-      var rrot = settled ? 1.72 : -ct * 9.5;
+      var rrot = settled ? (ux >= 0 ? 1.72 : -1.72)
+        : ct * (4.5 + 7 * sn) * (ux >= 0 ? -1 : 1);
+      var flail = settled ? 0 : (0.25 + 0.55 * sn);
       ctx.save();
       ctx.translate(rx, ry - 6);
       ctx.rotate(rrot);
-      drawRider(ctx, settled ? 0 : Math.sin(ct * 14) * 0.5, 0, 0, 0, PAL);
+      drawRider(ctx,
+        settled ? 0 : Math.sin(ct * (11 + 9 * sn)) * flail,          // body whip
+        settled ? 0 : (0.5 + 0.5 * Math.sin(ct * 17)) * flail * 0.9, // leg pump
+        settled ? 0 : (sn > 0.12 ? 1.2 + Math.sin(ct * 15) : 0),     // arm flail
+        0, PAL);
       ctx.restore();
 
       ctx.restore();
@@ -2522,6 +3010,7 @@
      * Speed: irrelevant, engine alone carries it. Runway: whole map drawable. */
     {
       name: 'Roll Out',
+      country: 'Australia', flagColors: ['#00247d','#e4002b'], landmark: { kind: 'opera', x: 1150 },
       hint: 'Drag to draw. SPACE to go.',
       theme: 0,
       startY: 420, flagX: 1500, flagY: 430,
@@ -2539,11 +3028,12 @@
      * No jumps, no hazards: pure grade tuition. */
     {
       name: 'Ridge Line',
+      country: 'Japan', flagColors: ['#ffffff','#bc002d'], landmark: { kind: 'torii', x: 1050 },
       hint: 'Climb gently. Steep stalls out.',
       theme: 0,
       startY: 620, flagX: 1500, flagY: 300,
       ink: 2.0,
-      par: 4.8,
+      par: 4.9,
       obstacles: [],
       zones: [],
       stars: [{ x: 500, y: 545 }, { x: 900, y: 430 }, { x: 1250, y: 215 }]
@@ -2557,11 +3047,12 @@
      * the bike's contact point. Both routes are always safe — nothing moves here. */
     {
       name: 'Buzz Cut',
+      country: 'Italy', flagColors: ['#009246','#ce2b37'], landmark: { kind: 'colosseum', x: 1180 },
       hint: 'Duck under the blade.',
       theme: 0,
       startY: 420, flagX: 1500, flagY: 440,
       ink: 1.9,
-      par: 3.1,
+      par: 3.2,
       obstacles: [
         { type: 'saw', x: 760, y: 400, r: 40 }
       ],
@@ -2577,6 +3068,7 @@
      * Star 3 high line: 460 (x1000) -> 320 (x1280) = 140/280 = 26.6deg, needs approach speed. */
     {
       name: 'Hot Soup',
+      country: 'Greece', flagColors: ['#0d5eaf','#ffffff'], landmark: { kind: 'statue', x: 1200 },
       hint: 'Bridge the lava.',
       theme: 0,
       startY: 440, flagX: 1500, flagY: 450,
@@ -2598,11 +3090,12 @@
      * Star 3 (1230,270): after landing at ~640 speed, climb 460 -> 270 over 330px = 30deg. */
     {
       name: 'Thin Air',
+      country: 'Egypt', flagColors: ['#ce1126','#000000'], landmark: { kind: 'pyramid', x: 1180 },
       hint: 'Gaps eat ink. Jump them.',
       theme: 1,
       startY: 430, flagX: 1500, flagY: 450,
       ink: 1.9,
-      par: 3.2,
+      par: 3.4,
       obstacles: [],
       zones: [{ x0: 700, x1: 860 }],
       stars: [{ x: 450, y: 415 }, { x: 900, y: 390 }, { x: 1230, y: 270 }]
@@ -2616,11 +3109,12 @@
      * Star 3 (1300,180): 340 (x1000) -> 180 (x1300) = 160/300 = 28deg, boost speed again. */
     {
       name: 'Kick Off',
+      country: 'France', flagColors: ['#0055a4','#ef4135'], landmark: { kind: 'eiffel', x: 1100 },
       hint: 'Draw over the boost arrows.',
       theme: 1,
       startY: 470, flagX: 1520, flagY: 300,
       ink: 1.8,
-      par: 4.1,
+      par: 4.2,
       obstacles: [
         { type: 'boost', x: 560, y: 470, angle: 0, power: 700 }
       ],
@@ -2644,6 +3138,7 @@
      * angle on landing is ~0.9rad < 1.15). Costs speed and ink; the reward is the hardest star. */
     {
       name: 'Pogo',
+      country: 'UK', flagColors: ['#012169','#c8102e'], landmark: { kind: 'bigben', x: 1250 },
       hint: 'Springs throw you skyward.',
       theme: 1,
       startY: 520, flagX: 1520, flagY: 260,
@@ -2671,6 +3166,7 @@
      * Star 3 (1080,600) is a tight low-corridor grab 120px short of crusher 2's column. */
     {
       name: 'Crush Hour',
+      country: 'Netherlands', flagColors: ['#ae1c28','#21468b'], landmark: { kind: 'windmill', x: 1150 },
       hint: 'Crushers pound. Wait, then go.',
       theme: 2,
       startY: 460, flagX: 1520, flagY: 540,
@@ -2699,11 +3195,12 @@
      * bike centre 318 => 82px clear) — a real detour, 90px of climb then straight back down. */
     {
       name: 'Sidewinder',
+      country: 'Norway', flagColors: ['#ba0c2f','#00205b'], landmark: { kind: 'mountain', x: 1200 },
       hint: 'Saws slide sideways too.',
       theme: 2,
       startY: 420, flagX: 1520, flagY: 440,
       ink: 1.8,
-      par: 3.1,
+      par: 3.2,
       obstacles: [
         { type: 'saw', x: 700, y: 400, r: 36, osc: { axis: 'x', amp: 120, period: 2.8, phase: 0 } },
         { type: 'saw', x: 1060, y: 400, r: 36, osc: { axis: 'x', amp: 120, period: 2.8, phase: 3.14 } },
@@ -2728,11 +3225,12 @@
      * v^2 = 450^2 + 2*1150*170 => 770 at launch, so the gap is still 1.7x covered. */
     {
       name: 'Wind Tunnel',
+      country: 'Iceland', flagColors: ['#02529c','#dc1e35'], landmark: { kind: 'iceberg', x: 1120 },
       hint: 'Wind shoves you in midair.',
       theme: 2,
       startY: 430, flagX: 1520, flagY: 450,
       ink: 1.9,
-      par: 3.3,
+      par: 3.6,
       obstacles: [
         { type: 'wind', x0: 760, x1: 1000, y0: 200, y1: 520, ax: -260 }
       ],
@@ -2754,6 +3252,7 @@
      *   45deg dive back into the lip which HELPS (arrive at the gap doing 780). A real detour. */
     {
       name: 'Twin Void',
+      country: 'Scotland', flagColors: ['#005eb8','#ffffff'], landmark: { kind: 'castle', x: 1300 },
       theme: 2,
       startY: 420, flagX: 1520, flagY: 460,
       ink: 1.9,
@@ -2777,11 +3276,12 @@
      *   the boost makes that grade, and it lengthens the flight, so it is the greedy line. */
     {
       name: 'Big Send',
+      country: 'India', flagColors: ['#ff9933','#138808'], landmark: { kind: 'mosque', x: 1240 },
       hint: 'Boost first. Then send it.',
       theme: 3,
       startY: 430, flagX: 1520, flagY: 470,
       ink: 1.9,
-      par: 2.9,
+      par: 3.0,
       obstacles: [
         { type: 'boost', x: 620, y: 430, angle: 0, power: 780 }
       ],
@@ -2805,6 +3305,7 @@
      * the lava — then climb 650 -> 470 over 400px = 24deg out. */
     {
       name: 'Meat Grinder',
+      country: 'China', flagColors: ['#de2910','#ffde00'], landmark: { kind: 'pagoda', x: 1350 },
       theme: 3,
       startY: 460, flagX: 1520, flagY: 470,
       ink: 1.8,
@@ -2839,11 +3340,12 @@
      * that one needs BOTH springs hit cleanly, i.e. the whole level solved properly. */
     {
       name: 'Sky Steps',
+      country: 'Nepal', flagColors: ['#dc143c','#003893'], landmark: { kind: 'mountain', x: 1330 },
       hint: 'Chain the springs upward.',
       theme: 3,
       startY: 620, flagX: 1520, flagY: 180,
       ink: 2.0,
-      par: 3.5,
+      par: 3.6,
       obstacles: [
         { type: 'spring', x: 500, y: 620, power: 780 },
         { type: 'block', x: 720, y: 430, w: 50, h: 270 },
@@ -2870,6 +3372,7 @@
      * lava-graze pocket (bike contact 610, 30px of air) then 610 -> 430 over 400px = 24deg out. */
     {
       name: 'Slalom Ridge',
+      country: 'Mexico', flagColors: ['#006847','#ce1126'], landmark: { kind: 'cactus', x: 1240 },
       theme: 4,
       startY: 400, flagX: 1520, flagY: 430,
       ink: 1.8,
@@ -2903,11 +3406,12 @@
      * full start-platform run-up) then a 46deg dive back into the pad. */
     {
       name: 'Updraft',
+      country: 'Chile', flagColors: ['#0039a6','#d52b1e'], landmark: { kind: 'moai', x: 1180 },
       hint: 'Ride the tailwind. Spring first.',
       theme: 4,
       startY: 560, flagX: 1520, flagY: 260,
       ink: 1.9,
-      par: 4.7,
+      par: 4.8,
       obstacles: [
         { type: 'spring', x: 620, y: 560, power: 800 },
         { type: 'wind', x0: 640, x1: 940, y0: 150, y1: 560, ax: 300 },
@@ -2933,6 +3437,7 @@
      * is the demanding one — 460 -> 360 over 150px = 33deg and you must STILL clear gap 3. */
     {
       name: 'Ink Chain',
+      country: 'Kenya', flagColors: ['#006600','#bb0000'], landmark: { kind: 'mountain', x: 1260 },
       theme: 4,
       startY: 400, flagX: 1540, flagY: 460,
       ink: 1.95,
@@ -2959,11 +3464,12 @@
      * apex, which is the flip star — you are inverted there if you are doing it right. */
     {
       name: 'Big Air',
+      country: 'Canada', flagColors: ['#d80621','#ffffff'], landmark: { kind: 'mountain', x: 1240 },
       hint: 'Big air. Spin, then land flat.',
       theme: 5,
       startY: 620, flagX: 1540, flagY: 680,
       ink: 1.9,
-      par: 4.1,
+      par: 4.8,
       /* RETUNED after simulation: the old spring (700,400,p860) could only be reached at ~220px/s
        * after a 22deg climb, so the arc came straight back down onto the 400px-tall wall. Spring
        * moved down/left (reached at ~330px/s), power raised, wall shortened and pushed right, so a
@@ -2999,10 +3505,11 @@
      * (v^2 = 398^2 + 2*1150*150 => 709 at launch, still 1.9x the range needed). */
     {
       name: 'Everything',
+      country: 'Finland', flagColors: ['#002f6c','#ffffff'], landmark: { kind: 'castle', x: 1290 },
       theme: 5,
       startY: 460, flagX: 1540, flagY: 600,
       ink: 1.9,
-      par: 2.8,
+      par: 2.9,
       obstacles: [
         { type: 'boost', x: 400, y: 460, angle: 0, power: 720 },
         { type: 'wind', x0: 640, x1: 880, y0: 200, y1: 520, ax: -240 },
@@ -3042,10 +3549,11 @@
      * the arc, which also commits you to the long landing. */
     {
       name: 'Last Ink',
+      country: 'Switzerland', flagColors: ['#da291c','#ffffff'], landmark: { kind: 'mountain', x: 1200 },
       theme: 5,
       startY: 340, flagX: 1540, flagY: 460,
       ink: 1.75,
-      par: 2.7,
+      par: 2.8,
       obstacles: [
         { type: 'boost', x: 300, y: 340, angle: 0, power: 760 },
         { type: 'saw', x: 820, y: 300, r: 34 },
@@ -3116,6 +3624,302 @@
       'Spin cycle complete.'
     ]
   };
+})();
+
+;
+
+/* ==== levels3b.js ==== */
+/* INK RIDER V4 — levels 21-35 of 50 (36-50 appended in part 2 below).
+ * Physics: g 1150, engine 620, vmax 780. Climb ≤22° easy, ≥36° stalls.
+ * Jumps: v450→~150px, v550→~240px, v650→~340px, v780→~470px. Spring rise = power²/2300. */
+(function(){
+'use strict';
+var L = window.LEVELS3;
+
+/* 21 USA — interstate speed run. Boost at 500 keeps v≈700; flat 200px void vs ~380px range. */
+L.push({ name: 'Route 66', country: 'USA', flagColors: ['#b22234','#3c3b6e'],
+  landmark: { kind: 'statue', x: 1250 }, theme: 0,
+  startY: 470, flagX: 1500, flagY: 470, ink: 1.8, par: 3.1,
+  obstacles: [ { type: 'boost', x: 500, y: 470, angle: 0, power: 700 } ],
+  zones: [ { x0: 760, x1: 960 } ],
+  stars: [ { x: 430, y: 450 }, { x: 860, y: 380 }, { x: 1240, y: 420 } ] });
+
+/* 22 Brazil — spring over a lava cove; high line to the third star. Spring 860 rises 321px. */
+L.push({ name: 'Carnival Air', country: 'Brazil', flagColors: ['#009c3b','#ffdf00'],
+  landmark: { kind: 'statue', x: 1120 }, theme: 0,
+  startY: 520, flagX: 1500, flagY: 480, ink: 1.9, par: 3.4,
+  obstacles: [ { type: 'spring', x: 620, y: 520, power: 860 },
+               { type: 'lava', x0: 700, x1: 1020, yTop: 640 } ],
+  zones: [],
+  stars: [ { x: 480, y: 500 }, { x: 860, y: 300 }, { x: 1180, y: 430 } ] });
+
+/* 23 Argentina — long dive then a flip-friendly launch: 34° dive to v≈740, 170px void, big hang. */
+L.push({ name: 'Pampas Drop', country: 'Argentina', flagColors: ['#74acdf','#ffffff'],
+  landmark: { kind: 'mountain', x: 1300 }, theme: 0,
+  startY: 240, flagX: 1520, flagY: 560, ink: 1.9, par: 3.3,
+  obstacles: [],
+  zones: [ { x0: 900, x1: 1070 } ],
+  stars: [ { x: 500, y: 360 }, { x: 985, y: 350 }, { x: 1300, y: 520 } ] });
+
+/* 24 Peru — terraced climb: three step blocks hopped via drawn ramps, then a ridge run. */
+L.push({ name: 'Inca Steps', country: 'Peru', flagColors: ['#d91023','#ffffff'],
+  landmark: { kind: 'mountain', x: 1180 }, theme: 0,
+  startY: 600, flagX: 1500, flagY: 300, ink: 2.0, par: 4.8,
+  obstacles: [ { type: 'block', x: 560, y: 560, w: 180, h: 200 },
+               { type: 'block', x: 860, y: 500, w: 180, h: 260 },
+               { type: 'block', x: 1160, y: 430, w: 170, h: 330 } ],
+  zones: [],
+  stars: [ { x: 470, y: 560 }, { x: 950, y: 460 }, { x: 1330, y: 380 } ] });
+
+/* 25 Morocco — dune rollers under two swinging blades; safe line stays low under the sweeps. */
+L.push({ name: 'Sahara Roll', country: 'Morocco', flagColors: ['#c1272d','#006233'],
+  landmark: { kind: 'mosque', x: 1220 }, theme: 0,
+  startY: 480, flagX: 1500, flagY: 470, ink: 1.9, par: 3.2,
+  obstacles: [ { type: 'saw', x: 800, y: 300, r: 38, osc: { axis: 'y', amp: 120, period: 2.6, phase: 0 } },
+               { type: 'saw', x: 1150, y: 320, r: 34, osc: { axis: 'y', amp: 100, period: 2.2, phase: 1.6 } } ],
+  zones: [],
+  stars: [ { x: 520, y: 430 }, { x: 800, y: 470 }, { x: 1150, y: 460 } ] });
+
+/* 26 Spain — the bull run: three crushers phase-staggered; the always-safe floor line is y 620. */
+L.push({ name: 'Bull Run', country: 'Spain', flagColors: ['#aa151b','#f1bf00'],
+  landmark: { kind: 'castle', x: 1300 }, theme: 1,
+  startY: 620, flagX: 1500, flagY: 600, ink: 1.7, par: 3.3,
+  obstacles: [ { type: 'block', x: 560, y: 180, w: 56, h: 240, osc: { axis: 'y', amp: 130, period: 2.4, phase: 0 } },
+               { type: 'block', x: 860, y: 180, w: 56, h: 240, osc: { axis: 'y', amp: 130, period: 2.4, phase: 2.1 } },
+               { type: 'block', x: 1160, y: 180, w: 56, h: 240, osc: { axis: 'y', amp: 130, period: 2.4, phase: 4.2 } } ],
+  zones: [],
+  stars: [ { x: 700, y: 560 }, { x: 1010, y: 560 }, { x: 1300, y: 540 } ] });
+
+/* 27 Portugal — clifftop coves: two 150px voids over lava, landings drawn ~80px down each. */
+L.push({ name: 'Algarve Hop', country: 'Portugal', flagColors: ['#006600','#ff0000'],
+  landmark: { kind: 'castle', x: 1360 }, theme: 1,
+  startY: 380, flagX: 1520, flagY: 560, ink: 1.9, par: 3.4,
+  obstacles: [ { type: 'lava', x0: 560, x1: 1180, yTop: 680 } ],
+  zones: [ { x0: 600, x1: 750 }, { x0: 950, x1: 1100 } ],
+  stars: [ { x: 675, y: 350 }, { x: 1025, y: 430 }, { x: 1360, y: 520 } ] });
+
+/* 28 Germany — autobahn: boost to near cap, then thread under a long roof block. */
+L.push({ name: 'Autobahn', country: 'Germany', flagColors: ['#dd0000','#ffce00'],
+  landmark: { kind: 'castle', x: 1200 }, theme: 1,
+  startY: 500, flagX: 1520, flagY: 500, ink: 1.7, par: 2.9,
+  obstacles: [ { type: 'boost', x: 460, y: 500, angle: 0, power: 760 },
+               { type: 'block', x: 820, y: 120, w: 300, h: 300 } ],
+  zones: [],
+  stars: [ { x: 400, y: 480 }, { x: 970, y: 500 }, { x: 1330, y: 440 } ] });
+
+/* 29 Austria — alpine slalom: saws alternate low/high; weave between, grades ≤20°. */
+L.push({ name: 'Alpine Line', country: 'Austria', flagColors: ['#ed2939','#ffffff'],
+  landmark: { kind: 'mountain', x: 1260 }, theme: 1,
+  startY: 460, flagX: 1500, flagY: 440, ink: 1.8, par: 3.3,
+  obstacles: [ { type: 'saw', x: 560, y: 560, r: 36 }, { type: 'saw', x: 800, y: 330, r: 36 },
+               { type: 'saw', x: 1040, y: 560, r: 36 }, { type: 'saw', x: 1280, y: 330, r: 36 } ],
+  zones: [],
+  stars: [ { x: 560, y: 440 }, { x: 1040, y: 430 }, { x: 1280, y: 470 } ] });
+
+/* 30 Czechia — spire vault: spring 900 (rise 352 from y560, apex 208) over a spire whose cap is
+ * y330 — clearable arriving at any speed ≤ ~650, so a plain run-in works. Land the far shelf. */
+L.push({ name: 'Spire Vault', country: 'Czechia', flagColors: ['#d7141a','#11457e'],
+  landmark: { kind: 'castle', x: 1150 }, theme: 1,
+  startY: 560, flagX: 1500, flagY: 520, ink: 1.9, par: 3.4,
+  obstacles: [ { type: 'spring', x: 640, y: 560, power: 900 },
+               { type: 'block', x: 850, y: 330, w: 60, h: 370 } ],
+  zones: [],
+  stars: [ { x: 500, y: 540 }, { x: 880, y: 260 }, { x: 1230, y: 480 } ] });
+
+/* 31 Turkey — crosswind strait: 150px void inside a -260 headwind box; launch ≥600 clears. */
+L.push({ name: 'Bosphorus', country: 'Turkey', flagColors: ['#e30a17','#ffffff'],
+  landmark: { kind: 'mosque', x: 1240 }, theme: 2,
+  startY: 480, flagX: 1500, flagY: 470, ink: 1.9, par: 3.7,
+  obstacles: [ { type: 'wind', x0: 620, x1: 1060, y0: 160, y1: 520, ax: -260 } ],
+  zones: [ { x0: 760, x1: 910 } ],
+  stars: [ { x: 560, y: 440 }, { x: 835, y: 350 }, { x: 1200, y: 430 } ] });
+
+/* 32 Jordan — the siq: a narrow slot between stacked walls (gap y 380-470), then a canyon run. */
+L.push({ name: 'Petra Slot', country: 'Jordan', flagColors: ['#ce1126','#007a3d'],
+  landmark: { kind: 'mountain', x: 1320 }, theme: 2,
+  startY: 340, flagX: 1520, flagY: 600, ink: 1.8, par: 3.2,
+  obstacles: [ { type: 'block', x: 700, y: 90, w: 60, h: 290 },
+               { type: 'block', x: 700, y: 470, w: 60, h: 240 },
+               { type: 'saw', x: 1120, y: 520, r: 34 } ],
+  zones: [],
+  stars: [ { x: 560, y: 360 }, { x: 730, y: 430 }, { x: 1240, y: 560 } ] });
+
+/* 33 UAE — tower hop: springs chain upward past two towers to a skyline finish. */
+L.push({ name: 'Tower Hop', country: 'UAE', flagColors: ['#00732f','#ff0000'],
+  landmark: { kind: 'ferris', x: 1240 }, theme: 2,
+  startY: 620, flagX: 1520, flagY: 260, ink: 2.0, par: 3.6,
+  obstacles: [ { type: 'spring', x: 520, y: 620, power: 820 },
+               { type: 'block', x: 700, y: 460, w: 60, h: 240 },
+               { type: 'spring', x: 940, y: 345, power: 800 },
+               { type: 'block', x: 1120, y: 300, w: 60, h: 400 } ],
+  zones: [],
+  stars: [ { x: 430, y: 600 }, { x: 760, y: 380 }, { x: 1300, y: 240 } ] });
+
+/* 34 Thailand — temple garden: lava pool bridged at ~0.55H under a slow x-swinging blade. */
+L.push({ name: 'Wat Steps', country: 'Thailand', flagColors: ['#a51931','#2d2a4a'],
+  landmark: { kind: 'pagoda', x: 1180 }, theme: 2,
+  startY: 300, flagX: 1500, flagY: 460, ink: 1.8, par: 3.2,
+  obstacles: [ { type: 'lava', x0: 640, x1: 1120, yTop: 620 },
+               { type: 'saw', x: 880, y: 380, r: 32, osc: { axis: 'x', amp: 130, period: 3.0, phase: 0 } } ],
+  zones: [],
+  stars: [ { x: 520, y: 340 }, { x: 880, y: 500 }, { x: 1260, y: 420 } ] });
+
+/* 35 Vietnam — karst arches: three 120px voids in a row, each landing drawn ~70px lower. */
+L.push({ name: 'Ha Long Run', country: 'Vietnam', flagColors: ['#da251d','#ffff00'],
+  landmark: { kind: 'mountain', x: 1380 }, theme: 2,
+  startY: 360, flagX: 1520, flagY: 600, ink: 2.0, par: 3.4,
+  obstacles: [],
+  zones: [ { x0: 520, x1: 640 }, { x0: 820, x1: 940 }, { x0: 1120, x1: 1240 } ],
+  stars: [ { x: 580, y: 330 }, { x: 880, y: 420 }, { x: 1180, y: 500 } ] });
+
+/* 36 Indonesia — the volcano: a wide lava caldera bridged high, ash saws drifting sideways. */
+L.push({ name: 'Ring of Fire', country: 'Indonesia', flagColors: ['#ce1126','#ffffff'],
+  landmark: { kind: 'mountain', x: 1150 }, theme: 3,
+  startY: 520, flagX: 1500, flagY: 520, ink: 1.8, par: 3.2,
+  obstacles: [ { type: 'lava', x0: 560, x1: 1160, yTop: 600 },
+               { type: 'saw', x: 720, y: 360, r: 30, osc: { axis: 'x', amp: 110, period: 2.8, phase: 0 } },
+               { type: 'saw', x: 1000, y: 330, r: 30, osc: { axis: 'x', amp: 110, period: 2.8, phase: 3.1 } } ],
+  zones: [],
+  stars: [ { x: 500, y: 480 }, { x: 860, y: 440 }, { x: 1240, y: 470 } ] });
+
+/* 37 NZ — windy city big-air: tailwind box (+240) stretches a 200px void into an easy soar. */
+L.push({ name: 'Windy Wēllington', country: 'New Zealand', flagColors: ['#00247d','#cc142b'],
+  landmark: { kind: 'mountain', x: 1330 }, theme: 3,
+  startY: 420, flagX: 1500, flagY: 500, ink: 1.9, par: 3.2,
+  obstacles: [ { type: 'wind', x0: 600, x1: 1150, y0: 140, y1: 520, ax: 240 } ],
+  zones: [ { x0: 780, x1: 980 } ],
+  stars: [ { x: 640, y: 380 }, { x: 880, y: 300 }, { x: 1240, y: 460 } ] });
+
+/* 38 Fiji — island hops: two coral voids over lava-bright water; relaxed pars, holiday pace. */
+L.push({ name: 'Island Hop', country: 'Fiji', flagColors: ['#68bfe5','#ffffff'],
+  theme: 3,
+  startY: 470, flagX: 1500, flagY: 480, ink: 1.9, par: 3.3,
+  obstacles: [ { type: 'lava', x0: 540, x1: 1220, yTop: 660 } ],
+  zones: [ { x0: 580, x1: 700 }, { x0: 940, x1: 1080 } ],
+  stars: [ { x: 640, y: 420 }, { x: 1010, y: 400 }, { x: 1330, y: 450 } ] });
+
+/* 39 South Africa — the table: a flat-topped mesa block; over the top or the long way round. */
+L.push({ name: 'Table Top', country: 'South Africa', flagColors: ['#007749','#e03c31'],
+  landmark: { kind: 'mountain', x: 1260 }, theme: 3,
+  startY: 560, flagX: 1500, flagY: 560, ink: 1.9, par: 3.7,
+  obstacles: [ { type: 'block', x: 760, y: 360, w: 320, h: 60 },
+               { type: 'saw', x: 920, y: 560, r: 36 } ],
+  zones: [],
+  stars: [ { x: 620, y: 520 }, { x: 920, y: 300 }, { x: 1260, y: 520 } ] });
+
+/* 40 Tanzania — Kili climb: one long 20° ascent with two saw gates, summit finish at 240. */
+L.push({ name: 'Kili Climb', country: 'Tanzania', flagColors: ['#1eb53a','#00a3dd'],
+  landmark: { kind: 'mountain', x: 1200 }, theme: 3,
+  startY: 640, flagX: 1500, flagY: 240, ink: 2.0, par: 4.8,
+  obstacles: [ { type: 'saw', x: 700, y: 480, r: 32 }, { type: 'saw', x: 1100, y: 330, r: 32 } ],
+  zones: [],
+  stars: [ { x: 540, y: 560 }, { x: 900, y: 420 }, { x: 1300, y: 270 } ] });
+
+/* 41 Ireland — rolling greens ending at the cliffs: a 170px void with a sheer 120px drop after. */
+L.push({ name: 'Moher Leap', country: 'Ireland', flagColors: ['#169b62','#ff883e'],
+  landmark: { kind: 'castle', x: 1330 }, theme: 4,
+  startY: 440, flagX: 1520, flagY: 600, ink: 1.9, par: 3.3,
+  obstacles: [],
+  zones: [ { x0: 880, x1: 1050 } ],
+  stars: [ { x: 560, y: 400 }, { x: 965, y: 340 }, { x: 1300, y: 560 } ] });
+
+/* 42 Wales — the dragon's back: sharp ridge weave between four blades, two of them breathing. */
+L.push({ name: 'Dragon Back', country: 'Wales', flagColors: ['#00b140','#ffffff'],
+  landmark: { kind: 'castle', x: 1180 }, theme: 4,
+  startY: 480, flagX: 1500, flagY: 460, ink: 1.8, par: 3.2,
+  obstacles: [ { type: 'saw', x: 540, y: 560, r: 34 },
+               { type: 'saw', x: 780, y: 320, r: 34, osc: { axis: 'y', amp: 90, period: 2.2, phase: 0 } },
+               { type: 'saw', x: 1020, y: 560, r: 34 },
+               { type: 'saw', x: 1260, y: 320, r: 34, osc: { axis: 'y', amp: 90, period: 2.2, phase: 3.1 } } ],
+  zones: [],
+  stars: [ { x: 660, y: 430 }, { x: 1020, y: 430 }, { x: 1350, y: 440 } ] });
+
+/* 43 Sweden — archipelago: alternating islets, two voids, a spring ferry across the second. */
+L.push({ name: 'Skerry Skip', country: 'Sweden', flagColors: ['#006aa7','#fecc02'],
+  landmark: { kind: 'iceberg', x: 1240 }, theme: 4,
+  startY: 500, flagX: 1500, flagY: 480, ink: 1.9, par: 3.4,
+  obstacles: [ { type: 'spring', x: 880, y: 540, power: 780 } ],
+  zones: [ { x0: 560, x1: 700 }, { x0: 960, x1: 1150 } ],
+  stars: [ { x: 630, y: 430 }, { x: 1055, y: 340 }, { x: 1320, y: 440 } ] });
+
+/* 44 Denmark — the wind farm: three windmill saws spin x-axis in a tailwind; ride the gusts. */
+L.push({ name: 'Turbine Row', country: 'Denmark', flagColors: ['#c8102e','#ffffff'],
+  landmark: { kind: 'windmill', x: 1300 }, theme: 4,
+  startY: 470, flagX: 1500, flagY: 470, ink: 1.8, par: 3.2,
+  obstacles: [ { type: 'wind', x0: 480, x1: 1250, y0: 140, y1: 480, ax: 200 },
+               { type: 'saw', x: 620, y: 330, r: 30, osc: { axis: 'x', amp: 90, period: 2.0, phase: 0 } },
+               { type: 'saw', x: 900, y: 330, r: 30, osc: { axis: 'x', amp: 90, period: 2.0, phase: 2.1 } },
+               { type: 'saw', x: 1180, y: 330, r: 30, osc: { axis: 'x', amp: 90, period: 2.0, phase: 4.2 } } ],
+  zones: [],
+  stars: [ { x: 620, y: 470 }, { x: 900, y: 470 }, { x: 1180, y: 250 } ] });
+
+/* 45 Poland — the mine: low ceiling run with two crushers and a lava sump between them. */
+L.push({ name: 'Salt Mine', country: 'Poland', flagColors: ['#ffffff','#dc143c'],
+  landmark: { kind: 'castle', x: 1220 }, theme: 4,
+  startY: 600, flagX: 1500, flagY: 600, ink: 1.7, par: 3.2,
+  obstacles: [ { type: 'block', x: 520, y: 140, w: 64, h: 300, osc: { axis: 'y', amp: 120, period: 2.8, phase: 0 } },
+               { type: 'lava', x0: 760, x1: 1000, yTop: 680 },
+               { type: 'block', x: 1120, y: 140, w: 64, h: 300, osc: { axis: 'y', amp: 120, period: 2.8, phase: 3.1 } } ],
+  zones: [],
+  stars: [ { x: 660, y: 560 }, { x: 880, y: 560 }, { x: 1300, y: 560 } ] });
+
+/* 46 South Korea — neon night run: boost through a saw chicane into a spring finish. */
+L.push({ name: 'Neon Seoul', country: 'South Korea', flagColors: ['#cd2e3a','#0047a0'],
+  landmark: { kind: 'pagoda', x: 1150 }, theme: 5,
+  startY: 500, flagX: 1500, flagY: 380, ink: 1.8, par: 3.2,
+  obstacles: [ { type: 'boost', x: 480, y: 500, angle: 0, power: 720 },
+               { type: 'saw', x: 720, y: 420, r: 30 }, { type: 'saw', x: 900, y: 560, r: 30 },
+               { type: 'spring', x: 1180, y: 520, power: 800 } ],
+  zones: [],
+  stars: [ { x: 640, y: 470 }, { x: 900, y: 430 }, { x: 1290, y: 330 } ] });
+
+/* 47 Mongolia — the steppe: one enormous 300px void; full-speed dive (v≈780 → ~470px range). */
+L.push({ name: 'Steppe Soar', country: 'Mongolia', flagColors: ['#c4272f','#015197'],
+  landmark: { kind: 'mountain', x: 1400 }, theme: 5,
+  startY: 260, flagX: 1520, flagY: 560, ink: 1.9, par: 3.3,
+  obstacles: [],
+  zones: [ { x0: 800, x1: 1100 } ],
+  stars: [ { x: 560, y: 350 }, { x: 950, y: 330 }, { x: 1330, y: 520 } ] });
+
+/* 48 Kazakhstan — headwind gauntlet: -300 wind over a 140px void, then a crusher gate. */
+L.push({ name: 'Steppe Wind', country: 'Kazakhstan', flagColors: ['#00afca','#fec50c'],
+  landmark: { kind: 'mountain', x: 1260 }, theme: 5,
+  startY: 460, flagX: 1500, flagY: 470, ink: 1.8, par: 3.6,
+  obstacles: [ { type: 'wind', x0: 560, x1: 1000, y0: 140, y1: 500, ax: -300 },
+               { type: 'block', x: 1140, y: 160, w: 60, h: 280, osc: { axis: 'y', amp: 120, period: 2.6, phase: 0 } } ],
+  zones: [ { x0: 700, x1: 840 } ],
+  stars: [ { x: 620, y: 420 }, { x: 770, y: 340 }, { x: 1320, y: 430 } ] });
+
+/* 49 Colombia — coffee hills: rolling triple combo — void, lava dip, twin saws — ink is tight. */
+L.push({ name: 'Coffee Hills', country: 'Colombia', flagColors: ['#fcd116','#003893'],
+  landmark: { kind: 'mountain', x: 1350 }, theme: 5,
+  startY: 420, flagX: 1520, flagY: 520, ink: 1.65, par: 3.3,
+  obstacles: [ { type: 'lava', x0: 760, x1: 980, yTop: 640 },
+               { type: 'saw', x: 1120, y: 420, r: 32 },
+               { type: 'saw', x: 1280, y: 560, r: 32 } ],
+  zones: [ { x0: 520, x1: 650 } ],
+  stars: [ { x: 585, y: 330 }, { x: 870, y: 500 }, { x: 1200, y: 480 } ] });
+
+/* 50 Cuba — Malecón finale: everything, ink 1.5 — void into headwind, lava bridge under a
+ * swinging blade, crusher gate, then a sprint. The hardest honest line in the game. */
+L.push({ name: 'Malecón', country: 'Cuba', flagColors: ['#002a8f','#cf142b'],
+  landmark: { kind: 'ferris', x: 1380 }, theme: 5,
+  startY: 400, flagX: 1540, flagY: 470, ink: 1.5, par: 3.4,
+  obstacles: [ { type: 'wind', x0: 500, x1: 820, y0: 140, y1: 460, ax: -240 },
+               { type: 'lava', x0: 880, x1: 1140, yTop: 640 },
+               { type: 'saw', x: 1010, y: 430, r: 30, osc: { axis: 'y', amp: 80, period: 2.4, phase: 0 } },
+               { type: 'block', x: 1260, y: 150, w: 58, h: 260, osc: { axis: 'y', amp: 110, period: 2.6, phase: 1.2 } } ],
+  zones: [ { x0: 560, x1: 690 } ],
+  stars: [ { x: 625, y: 300 }, { x: 1010, y: 560 }, { x: 1400, y: 430 } ] });
+
+/* extra bite for the quip pools */
+window.QUIPS3.crash.push('Passport revoked.', 'Customs said no.');
+window.QUIPS3.fall.push('Long-haul flight.', 'Gone walkabout.');
+window.QUIPS3.close.push('Metres from glory.');
+window.QUIPS3.win.push('Stamped in.', 'World tour!');
+window.QUIPS3.trick.push('Frequent flyer!', 'Jet lagged.');
+window.QUIPS3.steep.push('Peak too proud.');
+
 })();
 
 ;
@@ -3484,7 +4288,7 @@ var BRIDGE_DY = 55;          // ...only if the drawn end is roughly level with t
 var MICRO_GAP = 16;          // pen-jitter holes closed anywhere
 var LAND_TOL = 1.15;         // rad mismatch that still lands cleanly
 var LAND_TOL_HARD = 1.7;     // beyond this you are landing on your head — crash
-var ZOOM_RIDE = 1.9, ZOOM_DRAW = 1.0;   // the ride is watched close; drawing needs the whole level
+var ZOOM_RIDE = 2.25, ZOOM_DRAW = 1.0;  // Hill Climb-close during the ride; drawing sees the level
 var GHOST_HZ = 20;
 
 // ---------------- state ----------------
@@ -3747,7 +4551,12 @@ function buildDOM(){
       'color:#dff1ff;font:700 20px/1 system-ui;display:flex;align-items:center;justify-content:center}' +
     '#zoombar button:disabled{opacity:.32}' +
     '#btnMute.off{opacity:.55}' +
-    '@media (max-height:360px){#zoombar button{width:42px;height:42px;min-width:42px;min-height:42px}}';
+    '@media (max-height:360px){#zoombar button{width:42px;height:42px;min-width:42px;min-height:42px}}' +
+    // 50 levels: a 10-wide grid, scrollable if a screen is too short for 5 rows
+    '#grid{display:grid!important;grid-template-columns:repeat(10,minmax(44px,58px))!important;' +
+      'gap:8px!important;justify-content:center;max-width:96%;max-height:72%;overflow-y:auto;' +
+      '-webkit-overflow-scrolling:touch;padding:4px}' +
+    '@media (max-width:700px){#grid{grid-template-columns:repeat(10,minmax(40px,48px))!important;gap:6px!important}}';
   document.head.appendChild(ost);
   ['cv','hud','topbar','btnMenu','lvlname','inkwrap','inkbar','inkfill','inklabel','timer','starrow','btnMute','toast','trickpop',
    'keys','btnUndo','btnClear','btnGo','btnRetry','zoombar','btnZoomIn','btnZoomOut','btnFit',
@@ -3755,7 +4564,10 @@ function buildDOM(){
    'installTip','select','grid','selfoot','btnBack','winCard','winMedal','winStars','winName','winRows','btnNext','btnReplay','btnLevels',
    'rotate','fsBtn','flipBtn']
    .forEach(function(id){ el[id] = document.getElementById(id); });
-  cv = el.cv; ctx = cv.getContext('2d');
+  cv = el.cv;
+  // desynchronized: the compositor stops waiting for the page, which shaves visible latency off
+  // finger drawing on Android/desktop Chrome; Safari ignores the hint harmlessly
+  ctx = cv.getContext('2d', { desynchronized: true }) || cv.getContext('2d');
   isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
   document.body.classList.add(isTouch ? 'touch' : 'kbd');
   el.keys.textContent = isTouch ? '' : 'SPACE go · Z undo · C clear · R retry · ←→ lean';
@@ -3892,6 +4704,8 @@ function updateCamera(dt){
   // buttons. Nothing auto-zooms under their hands. RIDE phase: the camera follows the bike.
   if (phase === 'ride' && bike) {
     var tz = camTargetZoom;      // fixed: riding at the player's 3.5x draw zoom is unwatchable
+    // big air eases the camera back so you can see where you are going to land
+    if (bike.state === 'ride' && bike.airborne) tz = clamp(camTargetZoom - airT * 0.55, 1.55, camTargetZoom);
     var tx = bike.x + clamp(bike.vx || 0, -260, 260) * 0.35;
     var ty = bike.y - 40;
     cam.zoom = lerp(cam.zoom, tz, Math.min(1, dt * 4.5));
@@ -3947,7 +4761,7 @@ function loadLevel(i){
   resetBike();
   cam.x = W / 2; cam.y = H / 2; cam.zoom = ZOOM_DRAW;
   phase = 'draw';
-  el.lvlname.textContent = (li + 1) + ' · ' + L.name;
+  el.lvlname.textContent = (li + 1) + ' · ' + L.name + (L.country ? ' · ' + L.country : '');
   el.hint.textContent = phraseFor(L.hint || '');
   el.hint.hidden = !L.hint;
   el.onboard.hidden = !(li === 0 && !save.onboarded);   // level-1 finger demo, once
@@ -4270,7 +5084,37 @@ function bindInput(){
   });
 }
 function bindTap(node, fn){
-  node.addEventListener('pointerup', function(e){ e.preventDefault(); e.stopPropagation(); AUDIO3.unlock(); AUDIO3.click(); fn(); });
+  // Tap-vs-draw disambiguation. The start ledge sits near HUD buttons, and a stroke that begins
+  // on one used to be swallowed — the single most confusing thing about starting a level. A
+  // touch that MOVES is handed to the canvas as ink; only a touch that stays put is a press.
+  var downAt = null;
+  node.addEventListener('pointerdown', function(e){
+    if (phase !== 'draw') { downAt = null; return; }
+    downAt = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    e.stopPropagation();
+  });
+  node.addEventListener('pointermove', function(e){
+    if (!downAt || e.pointerId !== downAt.id) return;
+    if (Math.abs(e.clientX - downAt.x) + Math.abs(e.clientY - downAt.y) > 12) {
+      // it's a stroke: hand the pointer to the canvas mid-gesture
+      var sx = downAt.x, sy = downAt.y; downAt = null;
+      try { node.releasePointerCapture(e.pointerId); } catch(err){}
+      cv.dispatchEvent(new PointerEvent('pointerdown', { clientX: sx, clientY: sy, pointerId: e.pointerId, bubbles: true, cancelable: true, isPrimary: e.isPrimary }));
+      cv.dispatchEvent(new PointerEvent('pointermove', { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId, bubbles: true, cancelable: true, isPrimary: e.isPrimary }));
+    }
+  });
+  node.addEventListener('pointerup', function(e){
+    if (phase === 'draw' && downAt && e.pointerId === downAt.id) {
+      var moved = Math.abs(e.clientX - downAt.x) + Math.abs(e.clientY - downAt.y) > 12;
+      downAt = null;
+      if (moved) return;
+    } else if (phase === 'draw' && !downAt) {
+      // the touch became a stroke and was handed to the canvas; not a press
+      return;
+    }
+    e.preventDefault(); e.stopPropagation(); AUDIO3.unlock(); AUDIO3.click(); fn();
+  });
+  node.addEventListener('pointercancel', function(){ downAt = null; });
   node.addEventListener('pointerenter', function(){ AUDIO3.hover(); });
 }
 
@@ -4708,6 +5552,10 @@ function render(t, dt){
   skyFill(th);
   ART3.drawBackground(ctx, camView2, W, H, th, t);
   if (L) {
+    // one horizon silhouette per level — the country's quiet signature
+    if (L.landmark && ART3.drawLandmark) {
+      try { ART3.drawLandmark(ctx, L.landmark.kind, L.landmark.x, H * 0.72, th, t); } catch(e){}
+    }
     ART3.drawZones(ctx, zones, H, t);
     var i, o;
     for (i = 0; i < obs.length; i++) { o = obs[i];
@@ -4725,7 +5573,7 @@ function render(t, dt){
       else if (o.type === 'block') ART3.drawBlock(ctx, o.x, o.y, o.w, o.h, th, t, !!o.osc); }
     for (i = 0; i < stars.length; i++) drawScaled(ART3.drawStar, propVis, stars[i].x, stars[i].y,
       [stars[i].x, stars[i].y, t, stars[i].got]);
-    drawScaled(ART3.drawFlag, propVis, flag.x, flag.y - 40, [flag.x, flag.y, t, !!(bike && bike.state === 'win')]);
+    drawScaled(ART3.drawFlag, propVis, flag.x, flag.y - 40, [flag.x, flag.y, t, !!(bike && bike.state === 'win'), L.flagColors]);
 
     // ghost of your best run
     if (phase === 'ride' && ghostPlay && ghostPlay.length >= 3 && bike.state === 'ride') {
@@ -4743,6 +5591,7 @@ function render(t, dt){
       if (bike.state === 'crash') bike.crashT += dt;
       bikeProxy.x = bike.x; bikeProxy.y = bike.y - 12; bikeProxy.angle = bike.angle; bikeProxy.speed = bike.speed;
       bikeProxy.airborne = bike.airborne; bikeProxy.state = bike.state; bikeProxy.crashT = bike.crashT;
+      bikeProxy.crashVX = bike.vx; bikeProxy.crashVY = bike.vy;   // art throws the rider along this
       bikeProxy.dist = bike.dist; bikeProxy.flips = bike.flips; bikeProxy.lean = bike.lean;
       // The chassis rides on its suspension and squashes into a hard landing, so the bike reacts
       // to the ground instead of being pasted onto it.
@@ -4894,7 +5743,9 @@ function update(dt, t){
     el.timer.textContent = rideT.toFixed(1) + 's' + (best ? ' · best ' + best.toFixed(1) : ' · par ' + L.par);
     el.timer.style.color = rideT <= L.par ? '#ffd76a' : (rideT <= L.par * 1.35 ? '#dfe6f5' : (rideT <= L.par * 1.8 ? '#e0a072' : '#ff6b8f'));
   } else if (bike.state === 'crash') {
-    wreckStep(dt);
+    // the first beat of a wreck runs at 40% speed — you see WHAT got you before it tumbles away
+    var wdt = (bike.crashT < 0.32) ? dt * 0.4 : dt;
+    wreckStep(wdt);
     crashTimer -= dt;
     // a fall runs until the wreck is well clear of the screen, so you actually watch it go
     var offScreen = bike.y > H + 900;
