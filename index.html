@@ -2664,10 +2664,39 @@
 
     if (state === 'crash') {
       var ct = Math.max(0, num(b.crashT, 0));
-      // V4: the engine may pass the wreck's real velocity (b.crashVX/crashVY).
-      // With it, the rider is thrown ALONG that velocity — ahead of the bike
-      // off a forward launch, backwards off a saw flick — with limb flail
-      // scaled by speed. Without it (old callers), the original tumble runs.
+      // V5.1: when the engine drives both bodies (b.crashMode present), the art adds NO motion of
+      // its own — the previous look layered a local tumble on top of the engine's moving wreck and
+      // the sum read as random. Bike drawn at its pose; rider at the engine's thrown position.
+      if (b.crashMode === 'mounted' || b.crashMode === 'thrown') {
+        var cvx2 = num(b.crashVX, 0), cvy2 = num(b.crashVY, 0);
+        var cs2 = Math.sqrt(cvx2 * cvx2 + cvy2 * cvy2);
+        var moving2 = cs2 > 70;
+        ctx.save();
+        ctx.rotate(ang);
+        drawBikeBody(ctx, wheelRot + ct * 22, 0, PAL, 0);
+        ctx.restore();
+        var rdx = num(b.riderDX, 0), rdy = num(b.riderDY, 0);
+        var rrot = num(b.riderRotAbs, 0);
+        var settled2 = !!b.riderSettled;
+        ctx.save();
+        if (b.crashMode === 'mounted') {
+          // still on the bike: seated pose, arms braced, everything moves as one
+          ctx.rotate(ang);
+          ctx.translate(0, -12);
+          drawRider(ctx, moving2 ? Math.sin(ct * 9) * 0.18 : 0, 0.15, 0.5, 0, PAL);
+        } else {
+          ctx.translate(rdx, rdy);
+          ctx.rotate(rrot);
+          drawRider(ctx,
+            settled2 ? 0 : Math.sin(ct * 12) * 0.4,           // body whip while airborne
+            settled2 ? 0 : 0.5 + 0.4 * Math.sin(ct * 15),     // leg pump
+            settled2 ? 0 : 1.1,                                // arms out
+            0, PAL);
+        }
+        ctx.restore();
+        ctx.restore();
+        return;
+      }
       var cvx = num(b.crashVX, NaN), cvy = num(b.crashVY, NaN);
 
       if (cvx !== cvx && cvy !== cvy) {
@@ -4541,6 +4570,8 @@ var lastSig = '';                                       // viewport + visible-ba
 var paused = false, lastTapT = 0, lastCrashT = -9, tapStart = null, seenAir = false, forceW = 0, forceH = 0;
 var susp = 0, suspV = 0, squash = 0, airT = 0, airBest = 0;   // chassis bounce + hang time
 var crashKind = '', crashGround = true, crashSpin = 0;        // how the wreck behaves after impact
+// the rider is a second body after a crash: thrown, bounced and settled by the same physics
+var rdX = 0, rdY = 0, rdVX = 0, rdVY = 0, rdRot = 0, rdRotV = 0, rdSettled = false, rdMounted = true;
 var cam = { x: W / 2, y: H / 2, zoom: 1 };
 var camTargetZoom = ZOOM_DRAW;
 var ys = null, cols = 0;
@@ -5453,39 +5484,52 @@ function fail(kind, sub){
   bike.state = 'crash'; bike.crashT = 0; lastCrashT = nowS();
   AUDIO3.engineStop(); AUDIO3.wind(false);
   var sp = bike.speed || 0;
-  // Every impact throws the wreck differently — a saw flicks it back, a wall stops it dead, a
-  // stall just rolls it backwards down the hill, and a fall keeps its momentum all the way down.
+  var fwdVX = bike.airborne ? bike.vx : sp * Math.cos(bike.angle);
+  // Two bodies from here: the BIKE and the RIDER, each with one clean, physical impulse chosen
+  // by what was hit. No random components — the same crash always looks the same.
+  rdX = bike.x; rdY = bike.y - 12; rdSettled = false; rdMounted = false;
   switch (crashKind) {
     case 'fall':
-      crashTimer = 1.9; crashGround = false; crashSpin = 3 + Math.random() * 2;
-      camTargetZoom = 1.35;                    // pull back and watch it go
+      // rider stays on the bike and the pair simply falls away off the screen — no theatrics
+      rdMounted = true;
+      crashTimer = 1.9; crashGround = false; crashSpin = 0.9;
+      camTargetZoom = 1.35;
       ART3.shake(6); buzz(30); AUDIO3.fall();
       break;
     case 'lava':
-      bike.vx *= 0.2; bike.vy = 90; crashTimer = 1.5; crashGround = false; crashSpin = 1.2;
+      rdMounted = true;                        // both sink together
+      bike.vx *= 0.15; bike.vy = 80; crashTimer = 1.5; crashGround = false; crashSpin = 0.6;
       camTargetZoom = 1.8;
       ART3.shake(12); buzz([0, 60, 40, 120]); AUDIO3.crash();
       ART3.fxCrash(bike.x, bike.y, 0, -140);
       break;
     case 'saw':
-      bike.vx = -sp * 0.3 - 60; bike.vy = -340; crashTimer = 1.3; crashGround = true; crashSpin = 13;
+      // blade kicks the bike back and up, spinning; the rider is flicked higher and further back
+      bike.vx = -sp * 0.25 - 70; bike.vy = -300; crashTimer = 1.4; crashGround = true; crashSpin = 8.5;
+      rdVX = -sp * 0.35 - 110; rdVY = -430; rdRotV = -7;
       camTargetZoom = 1.95;
       ART3.shake(24); buzz([0, 50, 30, 80]); AUDIO3.crash();
       ART3.fxCrash(bike.x, bike.y, -sp * 0.5, -420);
       break;
     case 'block':
-      bike.vx = -sp * 0.45 - 40; bike.vy = -200; crashTimer = 1.3; crashGround = true; crashSpin = 7;
+      // classic over-the-bars: the bike stops dead at the wall, the rider keeps going
+      bike.vx = -40; bike.vy = -120; crashTimer = 1.5; crashGround = true; crashSpin = -2.6;
+      rdVX = Math.max(fwdVX * 0.8, 160); rdVY = -240; rdRotV = 8;
       camTargetZoom = 1.9;
       ART3.shake(26); buzz([0, 70, 40, 90]); AUDIO3.crash();
-      ART3.fxCrash(bike.x, bike.y, -sp * 0.6, -260);
+      ART3.fxCrash(bike.x, bike.y, -sp * 0.4, -260);
       break;
     case 'steep':
-      bike.vx = -70; bike.vy = -40; crashTimer = 1.4; crashGround = true; crashSpin = -2.4;
+      // ran out of hill: the pair just tips over backwards, almost gentle
+      rdMounted = true;
+      bike.vx = -60; bike.vy = -20; crashTimer = 1.4; crashGround = true; crashSpin = -1.4;
       camTargetZoom = 1.75;
       ART3.shake(7); buzz(25); AUDIO3.crash();
       break;
-    default:                                   // a botched landing: cartwheel on down the road
-      bike.vx = (bike.vx || sp) * 0.55; bike.vy = -230; crashTimer = 1.3; crashGround = true; crashSpin = 9;
+    default:
+      // botched landing: forward cartwheel, rider launched a little ahead of the tumbling bike
+      bike.vx = fwdVX * 0.45; bike.vy = -200; crashTimer = 1.4; crashGround = true; crashSpin = 7;
+      rdVX = fwdVX * 0.7; rdVY = -300; rdRotV = 6.5;
       camTargetZoom = 1.9;
       ART3.shake(18); buzz([0, 45, 30, 60]); AUDIO3.crash();
       ART3.fxCrash(bike.x, bike.y, bike.vx, -300);
@@ -5830,7 +5874,13 @@ function render(t, dt){
       if (bike.state === 'crash') bike.crashT += dt;
       bikeProxy.x = bike.x; bikeProxy.y = bike.y - 12; bikeProxy.angle = bike.angle; bikeProxy.speed = bike.speed;
       bikeProxy.airborne = bike.airborne; bikeProxy.state = bike.state; bikeProxy.crashT = bike.crashT;
-      bikeProxy.crashVX = bike.vx; bikeProxy.crashVY = bike.vy;   // art throws the rider along this
+      bikeProxy.crashVX = bike.vx; bikeProxy.crashVY = bike.vy;
+      // the engine owns crash motion for BOTH bodies; art just draws them where told
+      bikeProxy.crashMode = (bike.state === 'crash') ? (rdMounted ? 'mounted' : 'thrown') : '';
+      bikeProxy.riderDX = rdX - bike.x; bikeProxy.riderDY = (rdY - (bike.y - 12));
+      bikeProxy.riderRot = rdRot - (rdMounted ? bike.angle : 0);
+      bikeProxy.riderRotAbs = rdRot;
+      bikeProxy.riderSettled = rdSettled;
       bikeProxy.dist = bike.dist; bikeProxy.flips = bike.flips; bikeProxy.lean = bike.lean;
       // The chassis rides on its suspension and squashes into a hard landing, so the bike reacts
       // to the ground instead of being pasted onto it.
@@ -5974,22 +6024,53 @@ function wreckStep(dt){
   b.x += b.vx * dt;
   b.y += b.vy * dt;
   b.angle += crashSpin * dt;
-  crashSpin *= Math.max(0, 1 - dt * 1.2);
+  crashSpin *= Math.max(0, 1 - dt * 1.4);
   if (b.x < 8) { b.x = 8; b.vx = Math.abs(b.vx) * 0.3; }
-  if (crashKind === 'lava') { b.vy = Math.min(b.vy, 120); return; }   // sinks rather than bounces
-  if (!crashGround) return;                                           // falling: nothing to hit
-  var g = groundY(b.x);
-  if (g === g && b.y >= g) {
-    b.y = g;
-    if (b.vy > 40) {
-      b.vy = -b.vy * 0.32;                                            // bounce, losing most of it
-      ART3.fxLand(b.x, b.y, b.vy < -180);
-      if (Math.abs(b.vy) > 120) ART3.shake(5);
-    } else { b.vy = 0; }
-    b.vx *= 0.82;                                                     // skid to a stop
-    crashSpin *= 0.55;
+  if (crashKind === 'lava') { b.vy = Math.min(b.vy, 120); }
+  else if (crashGround) {
+    var g = groundY(b.x);
+    if (g === g && b.y >= g) {
+      b.y = g;
+      if (b.vy > 60) {
+        b.vy = -b.vy * 0.3;                                           // one real bounce
+        crashSpin *= -0.45;                                           // spin flips as it strikes
+        ART3.fxLand(b.x, b.y, b.vy < -180);
+        if (Math.abs(b.vy) > 120) ART3.shake(5);
+      } else {
+        b.vy = 0;
+        // settled: ease flat onto the slope instead of spinning in place
+        var sl = Math.atan2(groundSlope(b.x), 1);
+        b.angle += (sl - b.angle) * Math.min(1, dt * 10);
+        crashSpin = 0;
+      }
+      b.vx *= 0.8;                                                    // skid out
+    }
+    if (b.y > H + 300) crashGround = false;
   }
-  if (b.y > H + 300) crashGround = false;
+  // the rider: mounted riders just travel with the bike; thrown riders fly their own arc
+  if (rdMounted) {
+    rdX = b.x; rdY = b.y - 12; rdRot = b.angle; rdSettled = false;
+    return;
+  }
+  if (rdSettled) return;
+  rdVY += G * dt;
+  rdX += rdVX * dt;
+  rdY += rdVY * dt;
+  rdRot += rdRotV * dt;
+  rdRotV *= Math.max(0, 1 - dt * 1.1);
+  var rg = groundY(rdX);
+  if (rg === rg && rdY >= rg - 6) {
+    rdY = rg - 6;
+    if (rdVY > 90) {
+      rdVY = -rdVY * 0.22;                                            // soft body: barely bounces
+      rdVX *= 0.6; rdRotV *= 0.5;
+    } else {
+      // came to rest: lie flat in the direction of travel
+      var dir = rdVX >= 0 ? 1 : -1;
+      rdVX = 0; rdVY = 0; rdRotV = 0; rdSettled = true;
+      rdRot = dir * 1.62;
+    }
+  }
 }
 
 function update(dt, t){
