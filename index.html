@@ -3500,6 +3500,7 @@ var ptrs = {}, ptrCount = 0, gesture = null;                      // multi-touch
 var lastSig = '';                                       // viewport + visible-band signature
 var paused = false, lastTapT = 0, lastCrashT = -9, tapStart = null, seenAir = false, forceW = 0, forceH = 0;
 var susp = 0, suspV = 0, squash = 0, airT = 0, airBest = 0;   // chassis bounce + hang time
+var crashKind = '', crashGround = true, crashSpin = 0;        // how the wreck behaves after impact
 var cam = { x: W / 2, y: H / 2, zoom: 1 };
 var camTargetZoom = ZOOM_DRAW;
 var ys = null, cols = 0;
@@ -3852,7 +3853,11 @@ function toEss(clientX, clientY){
 // world<->screen with camera: screen = (world - camTopLeft) * scale * zoom + off
 function camView(){
   var vw = W / cam.zoom, vh = H / cam.zoom;
-  var cx = clamp(cam.x, vw / 2, W - vw / 2), cy = clamp(cam.y, vh / 2, H - vh / 2);
+  var cx = clamp(cam.x, vw / 2, W - vw / 2);
+  // A wreck falling into a void is followed past the floor of the level, so you watch it drop
+  // away into the dark rather than vanish at the bottom edge.
+  var falling = bike && bike.state === 'crash' && crashKind === 'fall';
+  var cy = falling ? Math.max(cam.y, vh / 2) : clamp(cam.y, vh / 2, H - vh / 2);
   return { x0: cx - vw / 2, y0: cy - vh / 2, vw: vw, vh: vh };
 }
 function worldPt(e){
@@ -4360,16 +4365,50 @@ function abortRide(){
   AUDIO3.engineStop(); AUDIO3.wind(false);
   resetBike(); phase = 'draw'; updateButtons();
 }
-function fail(kind){
+function fail(kind, sub){
   if (!bike || bike.state !== 'ride') return;
-  lastFail = { kind: kind, x: Math.round(bike.x), y: Math.round(bike.y), speed: Math.round(bike.speed), air: bike.airborne, t: Math.round(rideT * 100) / 100 };
-  bike.state = 'crash'; bike.crashT = 0; crashTimer = 0.9; lastCrashT = nowS();
-  camTargetZoom = 1.85;                       // punch in on the wreck
+  crashKind = sub || kind;
+  lastFail = { kind: kind, sub: crashKind, x: Math.round(bike.x), y: Math.round(bike.y), speed: Math.round(bike.speed), air: bike.airborne, t: Math.round(rideT * 100) / 100 };
+  bike.state = 'crash'; bike.crashT = 0; lastCrashT = nowS();
   AUDIO3.engineStop(); AUDIO3.wind(false);
-  if (kind === 'fall') AUDIO3.fall(); else AUDIO3.crash();
-  ART3.fxCrash(bike.x, bike.y, bike.vx, bike.vy);
-  ART3.shake(kind === 'fall' ? 9 : 20);
-  buzz(kind === 'fall' ? 30 : [0, 45, 30, 60]);
+  var sp = bike.speed || 0;
+  // Every impact throws the wreck differently — a saw flicks it back, a wall stops it dead, a
+  // stall just rolls it backwards down the hill, and a fall keeps its momentum all the way down.
+  switch (crashKind) {
+    case 'fall':
+      crashTimer = 1.9; crashGround = false; crashSpin = 3 + Math.random() * 2;
+      camTargetZoom = 1.35;                    // pull back and watch it go
+      ART3.shake(6); buzz(30); AUDIO3.fall();
+      break;
+    case 'lava':
+      bike.vx *= 0.2; bike.vy = 90; crashTimer = 1.5; crashGround = false; crashSpin = 1.2;
+      camTargetZoom = 1.8;
+      ART3.shake(12); buzz([0, 60, 40, 120]); AUDIO3.crash();
+      ART3.fxCrash(bike.x, bike.y, 0, -140);
+      break;
+    case 'saw':
+      bike.vx = -sp * 0.3 - 60; bike.vy = -340; crashTimer = 1.3; crashGround = true; crashSpin = 13;
+      camTargetZoom = 1.95;
+      ART3.shake(24); buzz([0, 50, 30, 80]); AUDIO3.crash();
+      ART3.fxCrash(bike.x, bike.y, -sp * 0.5, -420);
+      break;
+    case 'block':
+      bike.vx = -sp * 0.45 - 40; bike.vy = -200; crashTimer = 1.3; crashGround = true; crashSpin = 7;
+      camTargetZoom = 1.9;
+      ART3.shake(26); buzz([0, 70, 40, 90]); AUDIO3.crash();
+      ART3.fxCrash(bike.x, bike.y, -sp * 0.6, -260);
+      break;
+    case 'steep':
+      bike.vx = -70; bike.vy = -40; crashTimer = 1.4; crashGround = true; crashSpin = -2.4;
+      camTargetZoom = 1.75;
+      ART3.shake(7); buzz(25); AUDIO3.crash();
+      break;
+    default:                                   // a botched landing: cartwheel on down the road
+      bike.vx = (bike.vx || sp) * 0.55; bike.vy = -230; crashTimer = 1.3; crashGround = true; crashSpin = 9;
+      camTargetZoom = 1.9;
+      ART3.shake(18); buzz([0, 45, 30, 60]); AUDIO3.crash();
+      ART3.fxCrash(bike.x, bike.y, bike.vx, -300);
+  }
   var q = (bike.x / flag.x > 0.85) ? pick(QUIPS3.close) : pick(QUIPS3[kind] || QUIPS3.crash);
   toast(q, 1150);
   updateButtons();
@@ -4502,7 +4541,7 @@ function physStep(dt){
     else {
       var by = b.y + b.vy * dt + 0.5 * G * dt * dt;
       if (gy > by + 1.2) b.airborne = true;
-      else if (gy < b.y - STEP_HOP) { fail('crash'); return; }
+      else if (gy < b.y - STEP_HOP) { fail('crash', 'block'); return; }   // rode into a wall of ink
       else {
         if (gy < b.y - 7) b.speed *= 0.93;
         var prevGy = b.y;
@@ -4558,7 +4597,9 @@ function physStep(dt){
     b.angle -= 6.28318 * Math.floor((b.angle + Math.PI) / 6.28318);
     var spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
     b.speed = spd;
-    if (b.y > H + 70) { fail('fall'); return; }
+    // Declare the fall just below the lowest road the player is allowed to draw (H-26), so a
+    // deep dip is never mistaken for a death, and the camera then follows the plummet down.
+    if (b.y > H + 12) { fail('fall'); return; }
     var pad2 = padsAt(b.x, b.y, false);
     if (pad2 && pad2.type === 'spring' && pad2.fired <= 0 && b.vy > 0) {
       b.vy = -pad2.power; pad2.fired = 1; AUDIO3.spring(); ART3.fxSpring(pad2.x, pad2.y); ART3.shake(6);
@@ -4571,7 +4612,7 @@ function physStep(dt){
       // dropped far below the road still snapped up onto it and "floated" across.
       var cameFromAbove = oldY <= g + 2;
       if (!cameFromAbove && deep > LAND_SNAP) {
-        if (gOld === gOld && oldY > gOld + 30) { fail('crash'); return; }   // flew into a cliff face
+        if (gOld === gOld && oldY > gOld + 30) { fail('crash', 'block'); return; }   // flew into a cliff face
         b.dist += Math.sqrt(b.vx * b.vx + b.vy * b.vy) * dt * 0.25;
         return;                                                            // still falling, no landing
       }
@@ -4591,7 +4632,7 @@ function physStep(dt){
       var scrappy = false;
       if (vmag > 300 && (fwd / vmag < 0.25 || mis > LAND_TOL)) {
         if (mis <= LAND_TOL_HARD && fwd / vmag >= 0.12) scrappy = true;
-        else { b.y = g; fail('crash'); return; }
+        else { b.y = g; fail('crash', 'landing'); return; }   // came down wrong: cartwheel
       }
       landFlips();
       // hang time pays out on any touchdown you walk away from, so committing to a big jump is
@@ -4621,7 +4662,8 @@ function physStep(dt){
   b.dist += (b.airborne ? Math.sqrt(b.vx * b.vx + b.vy * b.vy) * 0.25 : 0) * dt;
 
   // hazards + pickups
-  if (hitObstacle(b.x, b.y - 12)) { fail('crash'); return; }
+  var hazard = hitObstacle(b.x, b.y - 12);
+  if (hazard) { fail('crash', hazard.type); return; }   // saw, block and lava each wreck you differently
   for (var i = 0; i < stars.length; i++) {
     var s = stars[i];
     if (!s.got) {
@@ -4814,6 +4856,32 @@ function hideOnboarding(){
 }
 function buzz(pattern){ if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch(e){} } }
 
+// The wreck keeps moving after the impact instead of freezing: it tumbles, skids along the road
+// and settles — or, if it went into a void, keeps falling until it is off the screen entirely.
+function wreckStep(dt){
+  var b = bike;
+  b.vy += G * dt;
+  b.x += b.vx * dt;
+  b.y += b.vy * dt;
+  b.angle += crashSpin * dt;
+  crashSpin *= Math.max(0, 1 - dt * 1.2);
+  if (b.x < 8) { b.x = 8; b.vx = Math.abs(b.vx) * 0.3; }
+  if (crashKind === 'lava') { b.vy = Math.min(b.vy, 120); return; }   // sinks rather than bounces
+  if (!crashGround) return;                                           // falling: nothing to hit
+  var g = groundY(b.x);
+  if (g === g && b.y >= g) {
+    b.y = g;
+    if (b.vy > 40) {
+      b.vy = -b.vy * 0.32;                                            // bounce, losing most of it
+      ART3.fxLand(b.x, b.y, b.vy < -180);
+      if (Math.abs(b.vy) > 120) ART3.shake(5);
+    } else { b.vy = 0; }
+    b.vx *= 0.82;                                                     // skid to a stop
+    crashSpin *= 0.55;
+  }
+  if (b.y > H + 300) crashGround = false;
+}
+
 function update(dt, t){
   animObs(t);
   if (paused) return;
@@ -4826,8 +4894,11 @@ function update(dt, t){
     el.timer.textContent = rideT.toFixed(1) + 's' + (best ? ' · best ' + best.toFixed(1) : ' · par ' + L.par);
     el.timer.style.color = rideT <= L.par ? '#ffd76a' : (rideT <= L.par * 1.35 ? '#dfe6f5' : (rideT <= L.par * 1.8 ? '#e0a072' : '#ff6b8f'));
   } else if (bike.state === 'crash') {
+    wreckStep(dt);
     crashTimer -= dt;
-    if (crashTimer <= 0) { resetBike(); phase = 'draw'; updateButtons(); }
+    // a fall runs until the wreck is well clear of the screen, so you actually watch it go
+    var offScreen = bike.y > H + 900;
+    if (crashTimer <= 0 || (crashKind === 'fall' && offScreen)) { resetBike(); phase = 'draw'; updateButtons(); }
   } else if (bike.state === 'win') {
     winTimer -= dt;
     if (bike.speed > 0) { bike.speed = Math.max(0, bike.speed - 950 * dt); bike.x = Math.min(bike.x + bike.speed * dt, W - 16); bike.dist += bike.speed * dt; }
