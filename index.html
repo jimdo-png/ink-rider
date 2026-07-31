@@ -3476,7 +3476,12 @@ var STEP_HOP = 52;           // max ledge the bike can hop up
 var PLAT0_X1 = 170, PLATF_PAD = 40;
 var STAR_R = 30;
 var AIR_ROT = 7.0;           // rad/s air control (a full flip in ~0.9s of held input)
-var LAND_TOL = 1.15;         // rad mismatch tolerated on landing
+var LAND_SNAP = 26;          // how far below a surface still counts as touching down on it
+var BRIDGE_GAP = 90;         // start/finish gap auto-closed at launch (drawing from the exact lip is fiddly)
+var BRIDGE_DY = 55;          // ...only if the drawn end is roughly level with the ledge
+var MICRO_GAP = 16;          // pen-jitter holes closed anywhere
+var LAND_TOL = 1.15;         // rad mismatch that still lands cleanly
+var LAND_TOL_HARD = 1.7;     // beyond this you are landing on your head — crash
 var ZOOM_RIDE = 1.9, ZOOM_DRAW = 1.0;   // the ride is watched close; drawing needs the whole level
 var GHOST_HZ = 20;
 
@@ -4293,8 +4298,47 @@ function openSelect(){
 }
 
 // ---------------- ride ----------------
+// Closes the gaps a player cannot reasonably be expected to draw: the joint at the launch ledge,
+// the joint at the flag ledge, and pen-jitter holes. Everything wider than that is a real gap the
+// rider has to jump. Free — it costs no ink — and it stays visible after a crash.
+function bridgeGaps(){
+  function fill(i0, i1, y0, y1){
+    for (var i = i0; i <= i1; i++) {
+      if (i < 0 || i >= cols) continue;
+      var cx = i * DX;
+      if (inZone(cx) || inPlat(cx)) continue;
+      var f = (i1 === i0) ? 0 : (i - i0) / (i1 - i0);
+      ys[i] = y0 + (y1 - y0) * f;
+    }
+    strokeDirty = true;
+  }
+  var first = -1, last = -1, i;
+  for (i = 0; i < cols; i++) if (ys[i] === ys[i]) { if (first < 0) first = i; last = i; }
+  if (first < 0) return;
+
+  var lipI = Math.ceil(plats[0].x1 / DX);
+  if (first * DX - plats[0].x1 <= BRIDGE_GAP && Math.abs(ys[first] - plats[0].y) <= BRIDGE_DY) {
+    fill(lipI, first - 1, plats[0].y, ys[first]);
+  }
+  var ledgeI = Math.floor(plats[1].x0 / DX);
+  if (plats[1].x0 - last * DX <= BRIDGE_GAP && Math.abs(ys[last] - plats[1].y) <= BRIDGE_DY) {
+    fill(last + 1, ledgeI, ys[last], plats[1].y);
+  }
+  // pen jitter: a hole only a few columns wide between two nearly level ends
+  var runEnd = -1;
+  for (i = 0; i < cols; i++) {
+    if (ys[i] === ys[i]) {
+      if (runEnd >= 0 && (i - runEnd) * DX <= MICRO_GAP && Math.abs(ys[i] - ys[runEnd]) <= 20) {
+        fill(runEnd + 1, i - 1, ys[runEnd], ys[i]);
+      }
+      runEnd = i;
+    }
+  }
+}
+
 function startRide(){
   if (phase !== 'draw' || inkUsed <= 10) return;
+  bridgeGaps();
   resetBike();
   bike.state = 'ride'; phase = 'ride'; rideT = 0; attempts++;
   camTargetZoom = ZOOM_RIDE;
@@ -4506,6 +4550,15 @@ function physStep(dt){
     var g = groundY(b.x);
     if (g === g && b.y >= g) {
       var deep = b.y - g;
+      // You have to actually REACH the far side. Previously the cliff-face guard was skipped
+      // whenever the previous column was empty — i.e. over every gap — so a bike that had
+      // dropped far below the road still snapped up onto it and "floated" across.
+      var cameFromAbove = oldY <= g + 2;
+      if (!cameFromAbove && deep > LAND_SNAP) {
+        if (gOld === gOld && oldY > gOld + 30) { fail('crash'); return; }   // flew into a cliff face
+        b.dist += Math.sqrt(b.vx * b.vx + b.vy * b.vy) * dt * 0.25;
+        return;                                                            // still falling, no landing
+      }
       if (gOld === gOld && oldY > gOld + 30 && deep > 40) { fail('crash'); return; }  // hit a cliff face
       var m2 = groundSlope(b.x), n2 = Math.sqrt(1 + m2 * m2);
       var tx = 1 / n2, ty = m2 / n2;
@@ -4517,10 +4570,20 @@ function physStep(dt){
       var dA = b.angle - slopeAng;
       dA -= 6.28318 * Math.floor((dA + Math.PI) / 6.28318);
       var mis = Math.abs(dA);
-      if (vmag > 300 && (fwd / vmag < 0.25 || mis > LAND_TOL)) { b.y = g; fail('crash'); return; }
+      // A landing is either clean, scrappy, or fatal — an untidy angle costs you speed and a
+      // shower of sparks rather than the run, so the forgiveness matches the leeway at takeoff.
+      var scrappy = false;
+      if (vmag > 300 && (fwd / vmag < 0.25 || mis > LAND_TOL)) {
+        if (mis <= LAND_TOL_HARD && fwd / vmag >= 0.12) scrappy = true;
+        else { b.y = g; fail('crash'); return; }
+      }
       landFlips();
       b.airborne = false; b.y = g; b.speed = Math.max(fwd, 45); b.angle = slopeAng; spinAcc = 0;
       var hard = vmag > 480;
+      if (scrappy) {
+        b.speed *= 0.55; ART3.shake(7); ART3.fxCrash(b.x, b.y, b.vx * 0.2, -80);
+        AUDIO3.crash(); buzz(20); toast('scrappy landing', 700);
+      }
       ART3.fxLand(b.x, b.y, hard);
       if (hard) ART3.shake(5);
       AUDIO3.wind(false);
