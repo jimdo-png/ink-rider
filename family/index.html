@@ -6169,7 +6169,9 @@ else boot();
 /* INK RIDER — FAMILY EDITION overlay.
  * Loaded after the full game bundle. Same engine, same 50 levels; every level belongs to a
  * family member: their head rides the bike bobblehead-style and their name is written across
- * the sky. Beau's levels keep the grapes joke from the Beau Edition. */
+ * the sky. Beau's levels keep the grapes joke — plus a rubber duck on his head.
+ * Adds: easy/hard mode, progressive difficulty, music+SFX toggles (music ON by default here),
+ * a grand-finale celebration on level 50, and a local top-3 family scoreboard. */
 (function(){
 'use strict';
 
@@ -6197,16 +6199,121 @@ var LABEL = {
  * level 50 is always Grandma's grand finale */
 var ORDER = ['beau','evie','nate','maeve','sean','jimmy','bailey','alison','kylie','katie','jack','grandad','grandma'];
 
-var heads = {}, name;
-for (name in B64) {
-  if (!Object.prototype.hasOwnProperty.call(B64, name)) continue;
+var heads = {}, hk;
+for (hk in B64) {
+  if (!Object.prototype.hasOwnProperty.call(B64, hk)) continue;
   var im = new Image();
-  im.src = 'data:image/jpeg;base64,' + B64[name];
-  heads[name] = im;
+  im.src = 'data:image/jpeg;base64,' + B64[hk];
+  heads[hk] = im;
 }
 
+/* ================= family save (separate key, defensively parsed) ================= */
+var FAM = { music: true, sfx: true, mode: 'easy', board: [] };
+function famLoad(){
+  var raw;
+  try { raw = JSON.parse(localStorage.getItem('inkrider3fam')); } catch(e){ return; }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+  FAM.music = (raw.music === false) ? false : true;
+  FAM.sfx = (raw.sfx === false) ? false : true;
+  FAM.mode = (raw.mode === 'hard') ? 'hard' : 'easy';
+  FAM.board = [];
+  if (Array.isArray(raw.board)) {
+    for (var i = 0; i < raw.board.length && FAM.board.length < 3; i++) {
+      var e = raw.board[i];
+      if (!e || typeof e !== 'object') continue;
+      var s = +e.s;
+      if (!isFinite(s) || s < 0) continue;
+      FAM.board.push({ n: cleanName(e.n), s: Math.min(Math.round(s), 1e9) });
+    }
+    FAM.board.sort(function(a, b){ return b.s - a.s; });
+  }
+}
+function famPersist(){
+  try { localStorage.setItem('inkrider3fam', JSON.stringify(FAM)); } catch(e){}
+}
+function cleanName(v){
+  v = String(v == null ? '' : v).replace(/[^\w \-'!.]/g, '').slice(0, 10);
+  return v || 'RIDER';
+}
+function totalScore(){
+  var raw, sum = 0;
+  try { raw = JSON.parse(localStorage.getItem('inkrider3')); } catch(e){ return 0; }
+  if (!raw || typeof raw !== 'object' || !raw.score || typeof raw.score !== 'object') return 0;
+  for (var k in raw.score) {
+    if (!Object.prototype.hasOwnProperty.call(raw.score, k)) continue;
+    var v = +raw.score[k];
+    if (isFinite(v) && v > 0) sum += Math.min(v, 1e9);
+  }
+  return Math.round(sum);
+}
+famLoad();
+
+/* ================= difficulty: easy/hard + progressively tighter ink ================= */
+var LV = window.LEVELS3 || [];
+var orig = [];
+for (var oi = 0; oi < LV.length; oi++) orig.push({ ink: LV[oi].ink || 1.8, par: LV[oi].par || 12 });
+function applyMode(){
+  var n = Math.max(LV.length - 1, 1);
+  for (var i = 0; i < LV.length; i++) {
+    var prog = 0.12 * (i / n);               // every ride gets a little tighter than the last
+    if (FAM.mode === 'easy') {
+      LV[i].ink = orig[i].ink * (1.30 - prog);          // 1.30x -> 1.18x ink budget
+      LV[i].par = Math.round(orig[i].par * 1.30 * 10) / 10;
+    } else {
+      LV[i].ink = orig[i].ink * (0.92 - prog);          // 0.92x -> 0.80x ink budget
+      LV[i].par = Math.round(orig[i].par * 0.95 * 10) / 10;
+    }
+  }
+}
+applyMode();
+
+/* ================= audio: music ON by default here, split music/SFX toggles ================= */
+var A = window.AUDIO3;
+var lastTheme = 0, musOn = false;
+var SFX_FNS = ['engineStart','engineSet','engineStop','scratch','wind','go','crash','fall','star','win','boost','spring','trick','click','hover'];
+var baseMusicStart = A.musicStart, baseMusicStop = A.musicStop;
+function audioSetup(){
+  if (A.muted) A.toggleMute();               // the base game boots muted; this edition sings
+  SFX_FNS.forEach(function(k){
+    var base = A[k];
+    if (typeof base !== 'function') return;
+    A[k] = function(){ if (!FAM.sfx) return; return base.apply(A, arguments); };
+  });
+  A.musicStart = function(themeIdx){
+    lastTheme = themeIdx | 0;
+    if (!FAM.music) return;
+    musOn = true;
+    return baseMusicStart.call(A, lastTheme);
+  };
+  A.musicStop = function(){ musOn = false; return baseMusicStop.call(A); };
+  A.toggleMute = function(){                 // M key / hidden base button = master toggle
+    var on = FAM.music || FAM.sfx;
+    FAM.music = !on; FAM.sfx = !on;
+    famPersist(); syncAudioButtons();
+    if (!FAM.music) A.musicStop();
+    else { A.unlock(); A.musicStart(lastTheme); }
+    return false;                            // the engine's own mute stays off
+  };
+  // the engine only starts music inside loadLevel; the boot level loaded silent, so give
+  // the first real user gesture a nudge
+  document.addEventListener('pointerup', function(){
+    if (FAM.music && !musOn) { A.unlock(); A.musicStart(lastTheme); }
+  }, true);
+}
+function setMusic(v){
+  FAM.music = v; famPersist(); syncAudioButtons();
+  if (!v) A.musicStop(); else { A.unlock(); A.musicStart(lastTheme); }
+}
+function setSfx(v){ FAM.sfx = v; famPersist(); syncAudioButtons(); }
+var btnMus = null, btnFx = null;
+function syncAudioButtons(){
+  if (btnMus) { btnMus.textContent = '♪'; btnMus.classList.toggle('off', !FAM.music); }
+  if (btnFx) { btnFx.textContent = 'FX'; btnFx.classList.toggle('off', !FAM.sfx); }
+}
+
+/* ================= the rider head, following every pose ================= */
 var cur = ORDER[0];
-function riderFor(levelNo){          // levelNo is 1-based
+function riderFor(levelNo){                  // levelNo is 1-based
   if (levelNo === 50) return 'grandma';
   return ORDER[(levelNo - 1) % ORDER.length];
 }
@@ -6214,8 +6321,6 @@ function setRider(p){
   cur = p;
   if (document.body) document.body.classList.toggle('fam-beau', p === 'beau');
 }
-
-/* ---- the rider head, following every pose (same bobblehead as the Beau Edition) ---- */
 var baseDrawBike = window.ART3.drawBike;
 function drawHead(ctx, r){
   var img = heads[cur];
@@ -6232,6 +6337,26 @@ function drawHead(ctx, r){
   ctx.strokeStyle = 'rgba(240,250,255,0.85)';
   ctx.stroke();
 }
+function drawDuck(ctx, t){                   // the rubber duck rides Beau
+  ctx.save();
+  ctx.rotate(Math.sin(t * 3.1) * 0.09);
+  ctx.fillStyle = '#ffd23f';
+  ctx.beginPath(); ctx.ellipse(0, 0, 14, 9.5, 0, 0, 6.28318); ctx.fill();       // body
+  ctx.beginPath(); ctx.moveTo(-13, -2); ctx.quadraticCurveTo(-19, -8, -14, -9); // tail flick
+  ctx.quadraticCurveTo(-11, -6, -9, -4); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.arc(9, -10, 7.5, 0, 6.28318); ctx.fill();                // head
+  ctx.fillStyle = '#f0b91e';
+  ctx.beginPath(); ctx.ellipse(-2, 1, 6.5, 4.2, -0.35, 0, 6.28318); ctx.fill(); // wing
+  ctx.fillStyle = '#ff8c1a';
+  ctx.beginPath(); ctx.moveTo(15.5, -10.5); ctx.quadraticCurveTo(21, -9.5, 15.5, -7.5);
+  ctx.quadraticCurveTo(14, -9, 15.5, -10.5); ctx.closePath(); ctx.fill();       // beak
+  ctx.fillStyle = '#22303c';
+  ctx.beginPath(); ctx.arc(11, -12, 1.5, 0, 6.28318); ctx.fill();               // eye
+  ctx.strokeStyle = 'rgba(90,60,0,0.28)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.ellipse(0, 0, 14, 9.5, 0, 0, 6.28318); ctx.stroke();
+  ctx.restore();
+}
 window.ART3.drawBike = function(ctx, b, t){
   baseDrawBike.call(window.ART3, ctx, b, t);
   var R = 45;
@@ -6241,6 +6366,7 @@ window.ART3.drawBike = function(ctx, b, t){
     ctx.rotate(b.riderRotAbs || 0);
     ctx.translate(0, -30);
     drawHead(ctx, R);
+    if (cur === 'beau') { ctx.translate(4, -R - 9); drawDuck(ctx, t); }
   } else {
     ctx.translate(b.x || 0, b.y || 0);
     ctx.rotate(b.angle || 0);
@@ -6248,11 +6374,12 @@ window.ART3.drawBike = function(ctx, b, t){
     ctx.translate(2 - lean * 4, -52);           // giant head rides high so the bike stays visible
     ctx.rotate(-(b.angle || 0) * 0.35);         // head stays a bit more upright than the bike
     drawHead(ctx, R);
+    if (cur === 'beau') { ctx.translate(4, -R - 9); drawDuck(ctx, t); }
   }
   ctx.restore();
 };
 
-/* ---- Beau's levels keep grape stars; everyone else keeps stars ---- */
+/* ================= Beau's levels keep grape stars ================= */
 var baseDrawStar = window.ART3.drawStar;
 window.ART3.drawStar = function(ctx, x, y, t, got){
   if (cur !== 'beau') { baseDrawStar.call(window.ART3, ctx, x, y, t, got); return; }
@@ -6286,7 +6413,7 @@ window.ART3.drawStar = function(ctx, x, y, t, got){
   ctx.restore();
 };
 
-/* ---- the rider's name across the sky of their level ---- */
+/* ================= the rider's name across the sky ================= */
 var baseBg = window.ART3.drawBackground;
 window.ART3.drawBackground = function(ctx, cam, W, H, themeIdx, t){
   baseBg.call(window.ART3, ctx, cam, W, H, themeIdx, t);
@@ -6314,29 +6441,247 @@ window.ART3.drawBackground = function(ctx, cam, W, H, themeIdx, t){
   ctx.restore();
 };
 
-/* ---- keep the current rider in sync with the level HUD ---- */
+/* ================= keep the rider in sync with the level HUD ================= */
+var lvlEl = null;
+function currentLevelNo(){
+  var m = lvlEl && /^(\d+)/.exec(lvlEl.textContent || '');
+  return m ? parseInt(m[1], 10) : 0;
+}
 function watchLevel(){
-  var lv = document.getElementById('lvlname');
-  if (!lv) return;
+  lvlEl = document.getElementById('lvlname');
+  if (!lvlEl) return;
   function sync(){
-    var m = /^(\d+)/.exec(lv.textContent || '');
-    if (m) setRider(riderFor(parseInt(m[1], 10)));
+    var n = currentLevelNo();
+    if (n) setRider(riderFor(n));
   }
   if (window.MutationObserver) {
-    new MutationObserver(sync).observe(lv, { childList: true, characterData: true, subtree: true });
+    new MutationObserver(sync).observe(lvlEl, { childList: true, characterData: true, subtree: true });
   }
   sync();
 }
 
-/* ---- HUD + title dressing ---- */
+/* ================= scoreboard + mode panel on the level-select screen ================= */
+var panel = null, modeBtn = null, rowsBox = null, totLine = null;
+function buildPanel(){
+  var sel = document.getElementById('select');
+  if (!sel) return;
+  panel = document.createElement('div');
+  panel.id = 'famPanel';
+  var h = document.createElement('div');
+  h.className = 'famh';
+  h.textContent = '🏆 FAMILY BEST';
+  rowsBox = document.createElement('div');
+  rowsBox.id = 'famRows';
+  totLine = document.createElement('div');
+  totLine.id = 'famTot';
+  modeBtn = document.createElement('button');
+  modeBtn.id = 'famMode';
+  modeBtn.addEventListener('click', function(){
+    FAM.mode = (FAM.mode === 'easy') ? 'hard' : 'easy';
+    applyMode(); famPersist(); renderPanel();
+  });
+  panel.appendChild(h); panel.appendChild(rowsBox); panel.appendChild(totLine); panel.appendChild(modeBtn);
+  sel.appendChild(panel);
+  var grid = document.getElementById('grid');
+  if (grid && window.MutationObserver) {
+    new MutationObserver(renderPanel).observe(grid, { childList: true });   // select screen reopened
+  }
+  renderPanel();
+}
+function renderPanel(){
+  if (!rowsBox) return;
+  while (rowsBox.firstChild) rowsBox.removeChild(rowsBox.firstChild);
+  if (!FAM.board.length) {
+    var d = document.createElement('div');
+    d.className = 'famrow dim';
+    d.textContent = 'finish level 50 to claim a spot';
+    rowsBox.appendChild(d);
+  }
+  for (var i = 0; i < FAM.board.length; i++) {
+    var r = document.createElement('div');
+    r.className = 'famrow';
+    var a = document.createElement('span');
+    a.textContent = ['🥇', '🥈', '🥉'][i] + ' ' + FAM.board[i].n;
+    var b = document.createElement('b');
+    b.textContent = FAM.board[i].s.toLocaleString();
+    r.appendChild(a); r.appendChild(b);
+    rowsBox.appendChild(r);
+  }
+  totLine.textContent = 'current family score: ' + totalScore().toLocaleString();
+  modeBtn.textContent = (FAM.mode === 'easy') ? 'MODE: EASY 🌞 (tap for hard)' : 'MODE: HARD 💀 (tap for easy)';
+}
+
+/* ================= the level-50 grand finale ================= */
+var fin = null, finCv = null, finRAF = 0, finFired = false, nameBox = null, saveBtn = null, finRows = null;
+function buildFinale(){
+  var app = document.getElementById('app') || document.body;
+  fin = document.createElement('div');
+  fin.id = 'famFinale';
+  finCv = document.createElement('canvas');
+  fin.appendChild(finCv);
+  var card = document.createElement('div');
+  card.id = 'famCard';
+  var h1 = document.createElement('div'); h1.id = 'famBig'; h1.textContent = '🏆 FAMILY CHAMPION! 🏆';
+  var h2 = document.createElement('div'); h2.id = 'famSub'; h2.textContent = 'ALL 50 LEVELS RIDDEN — GRANDMA IS PROUD';
+  var faces = document.createElement('div'); faces.id = 'famFaces';
+  for (var i = 0; i < ORDER.length; i++) {
+    var img = document.createElement('img');
+    img.src = heads[ORDER[i]].src;
+    img.alt = LABEL[ORDER[i]];
+    img.style.animationDelay = (i * 0.09) + 's';
+    faces.appendChild(img);
+  }
+  var sc = document.createElement('div'); sc.id = 'famScore';
+  var entry = document.createElement('div'); entry.id = 'famEntry';
+  nameBox = document.createElement('input');
+  nameBox.maxLength = 10; nameBox.placeholder = 'YOUR NAME'; nameBox.autocomplete = 'off';
+  saveBtn = document.createElement('button'); saveBtn.textContent = 'SAVE SCORE';
+  entry.appendChild(nameBox); entry.appendChild(saveBtn);
+  finRows = document.createElement('div'); finRows.id = 'famFinRows';
+  var close = document.createElement('button'); close.id = 'famClose'; close.textContent = 'KEEP RIDING';
+  card.appendChild(h1); card.appendChild(h2); card.appendChild(faces); card.appendChild(sc);
+  card.appendChild(entry); card.appendChild(finRows); card.appendChild(close);
+  fin.appendChild(card);
+  app.appendChild(fin);
+  saveBtn.addEventListener('click', function(){
+    var s = totalScore();
+    FAM.board.push({ n: cleanName(nameBox.value), s: s });
+    FAM.board.sort(function(a, b){ return b.s - a.s; });
+    FAM.board = FAM.board.slice(0, 3);
+    famPersist(); renderPanel(); renderFinRows(s);
+    entry.style.display = 'none';
+  });
+  close.addEventListener('click', hideFinale);
+  var win = document.getElementById('winCard');
+  if (win && window.MutationObserver) {
+    new MutationObserver(function(){
+      var showing = win.classList.contains('show');
+      if (!showing) { finFired = false; return; }
+      if (!finFired && currentLevelNo() === 50) { finFired = true; showFinale(); }
+    }).observe(win, { attributes: true, attributeFilter: ['class'] });
+  }
+}
+function renderFinRows(justScored){
+  while (finRows.firstChild) finRows.removeChild(finRows.firstChild);
+  for (var i = 0; i < FAM.board.length; i++) {
+    var r = document.createElement('div');
+    r.className = 'famrow' + (FAM.board[i].s === justScored ? ' hot' : '');
+    var a = document.createElement('span');
+    a.textContent = ['🥇', '🥈', '🥉'][i] + ' ' + FAM.board[i].n;
+    var b = document.createElement('b');
+    b.textContent = FAM.board[i].s.toLocaleString();
+    r.appendChild(a); r.appendChild(b);
+    finRows.appendChild(r);
+  }
+}
+function showFinale(){
+  var sc = document.getElementById('famScore');
+  var tot = totalScore();
+  if (sc) sc.textContent = 'FAMILY SCORE: ' + tot.toLocaleString();
+  var entry = document.getElementById('famEntry');
+  if (entry) entry.style.display = '';
+  if (nameBox) nameBox.value = '';
+  renderFinRows(-1);
+  fin.classList.add('show');
+  try { window.AUDIO3.win('gold'); } catch(e){}
+  startConfetti();
+}
+function hideFinale(){
+  fin.classList.remove('show');
+  if (finRAF) { cancelAnimationFrame(finRAF); finRAF = 0; }
+}
+function startConfetti(){
+  var reduce = false;
+  try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){}
+  var ctx = finCv.getContext('2d');
+  var w = fin.clientWidth || 800, h = fin.clientHeight || 400;
+  finCv.width = w; finCv.height = h;
+  var COLS = ['#ffd23f', '#2be0ff', '#ff6b8f', '#69c05a', '#c489ff', '#ff8c1a', '#fff'];
+  var ps = [], N = reduce ? 60 : 240;
+  for (var i = 0; i < N; i++) {
+    ps.push({ x: Math.random() * w, y: -Math.random() * h,
+              vx: (Math.random() - 0.5) * 60, vy: 70 + Math.random() * 160,
+              s: 4 + Math.random() * 6, a: Math.random() * 6.28,
+              va: (Math.random() - 0.5) * 6, c: COLS[i % COLS.length] });
+  }
+  var last = performance.now();
+  function tick(now){
+    var dt = Math.min((now - last) / 1000, 0.05); last = now;
+    ctx.clearRect(0, 0, w, h);
+    for (var i = 0; i < ps.length; i++) {
+      var p = ps[i];
+      p.x += p.vx * dt; p.y += p.vy * dt; p.a += p.va * dt;
+      if (p.y > h + 20) { p.y = -20; p.x = Math.random() * w; }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.a);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.62);
+      ctx.restore();
+    }
+    if (fin.classList.contains('show') && !reduce) finRAF = requestAnimationFrame(tick);
+  }
+  if (reduce) { tick(performance.now()); return; }
+  finRAF = requestAnimationFrame(tick);
+}
+
+/* ================= HUD + title dressing ================= */
 function dress(){
   var tag = document.getElementById('tag');
   if (tag) tag.textContent = 'the family edition';
   var v2 = document.getElementById('v2tag');
   if (v2) v2.textContent = 'FAM';
   var st = document.createElement('style');
-  st.textContent = 'body.fam-beau #starrow span::before{content:"🍇"!important}';
+  st.textContent =
+    'body.fam-beau #starrow span::before{content:"🍇"!important}' +
+    '#btnMute{display:none!important}' +
+    '#btnFamMusic.off,#btnFamSfx.off{opacity:.35}' +
+    '#btnFamSfx{font-size:13px;letter-spacing:.5px}' +
+    '#famPanel{margin-top:10px;width:min(92vw,560px);background:rgba(10,18,30,.55);border:1px solid rgba(120,180,255,.18);' +
+      'border-radius:14px;padding:10px 14px;font:700 13px system-ui;color:#dfe6f5}' +
+    '#famPanel .famh{font:900 14px system-ui;letter-spacing:1px;margin-bottom:6px;color:#ffd76a}' +
+    '.famrow{display:flex;justify-content:space-between;gap:12px;padding:3px 0}' +
+    '.famrow.dim{opacity:.55}.famrow.hot b{color:#ffd76a}' +
+    '.famrow b{font-variant-numeric:tabular-nums}' +
+    '#famTot{margin-top:6px;opacity:.75;font-weight:600}' +
+    '#famMode{margin-top:8px;width:100%;font:800 13px system-ui;padding:9px 12px;border-radius:10px;' +
+      'background:#1b2c44;color:#cfe6ff;border:1px solid rgba(120,180,255,.25)}' +
+    '#famFinale{position:absolute;inset:0;display:none;z-index:80;background:rgba(4,8,16,.86)}' +
+    '#famFinale.show{display:flex;align-items:center;justify-content:center}' +
+    '#famFinale canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}' +
+    '#famCard{position:relative;text-align:center;max-width:min(92vw,620px);max-height:92%;overflow:auto;' +
+      'background:rgba(12,22,38,.92);border:1px solid rgba(255,215,63,.35);border-radius:20px;' +
+      'padding:22px 26px;color:#eef4ff;font:700 14px system-ui;box-shadow:0 0 60px rgba(255,210,63,.15)}' +
+    '#famBig{font:900 30px system-ui;color:#ffd76a;letter-spacing:1px}' +
+    '#famSub{margin-top:4px;font:800 13px system-ui;opacity:.8;letter-spacing:1px}' +
+    '#famFaces{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:14px 0 6px}' +
+    '#famFaces img{width:44px;height:44px;border-radius:50%;border:2px solid rgba(240,250,255,.7);' +
+      'animation:famPop .5s cubic-bezier(.2,1.6,.4,1) both}' +
+    '@keyframes famPop{from{transform:scale(0)}to{transform:scale(1)}}' +
+    '@media (prefers-reduced-motion: reduce){#famFaces img{animation:none}}' +
+    '#famScore{font:900 20px system-ui;color:#2be0ff;margin:8px 0}' +
+    '#famEntry{display:flex;gap:8px;justify-content:center;margin:10px 0}' +
+    '#famEntry input{font:800 16px system-ui;padding:10px 12px;border-radius:10px;border:1px solid rgba(120,180,255,.4);' +
+      'background:#0c1626;color:#eef4ff;width:150px;text-transform:uppercase}' +
+    '#famEntry button{font:800 14px system-ui;padding:10px 14px;border-radius:10px;border:0;background:#ffd23f;color:#3a2a00}' +
+    '#famFinRows{margin:6px auto 2px;max-width:320px}' +
+    '#famClose{margin-top:12px;font:800 15px system-ui;padding:12px 22px;border-radius:12px;border:0;background:#2be0ff;color:#00222c}';
   document.head.appendChild(st);
+
+  // topbar: hide the master mute, add music + FX toggles
+  var mute = document.getElementById('btnMute');
+  if (mute && mute.parentNode) {
+    btnMus = document.createElement('button');
+    btnMus.id = 'btnFamMusic';
+    btnFx = document.createElement('button');
+    btnFx.id = 'btnFamSfx';
+    mute.parentNode.insertBefore(btnMus, mute);
+    mute.parentNode.insertBefore(btnFx, mute);
+    btnMus.addEventListener('click', function(){ setMusic(!FAM.music); });
+    btnFx.addEventListener('click', function(){ setSfx(!FAM.sfx); });
+    syncAudioButtons();
+  }
+
   // the win card builds its stars as ★ text — on Beau's levels they become grapes
   var win = document.getElementById('winStars');
   if (win && window.MutationObserver) {
@@ -6347,7 +6692,11 @@ function dress(){
       });
     }).observe(win, { childList: true, subtree: true });
   }
+
+  audioSetup();
   watchLevel();
+  buildPanel();
+  buildFinale();
   document.title = 'INK RIDER · FAMILY EDITION';
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', dress);
