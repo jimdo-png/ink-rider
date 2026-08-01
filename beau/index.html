@@ -6197,19 +6197,19 @@ function drawHead(ctx, r){
 }
 window.ART3.drawBike = function(ctx, b, t){
   baseDrawBike.call(window.ART3, ctx, b, t);
-  var R = 15;                                   // bobblehead: deliberately oversized
+  var R = 45;                                   // bobblehead: three times the joke
   ctx.save();
   if (b && b.state === 'crash' && b.crashMode === 'thrown') {
     // the thrown rider carries the head with them
     ctx.translate((b.x || 0) + (b.riderDX || 0), (b.y || 0) + (b.riderDY || 0));
     ctx.rotate(b.riderRotAbs || 0);
-    ctx.translate(0, -10);
+    ctx.translate(0, -30);
     drawHead(ctx, R);
   } else {
     ctx.translate(b.x || 0, b.y || 0);
     ctx.rotate(b.angle || 0);
     var lean = b ? (b.lean || 0) : 0;
-    ctx.translate(2 - lean * 4, -26);           // where the helmet sits in the rider pose
+    ctx.translate(2 - lean * 4, -52);           // giant head rides high so the bike stays visible
     ctx.rotate(-(b.angle || 0) * 0.35);         // head stays a bit more upright than the bike
     drawHead(ctx, R);
   }
