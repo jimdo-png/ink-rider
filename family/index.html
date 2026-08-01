@@ -6269,7 +6269,7 @@ applyMode();
 
 /* ================= audio: music ON by default here, split music/SFX toggles ================= */
 var A = window.AUDIO3;
-var lastTheme = 0, musOn = false;
+var lastTheme = 0, musOn = false, unlocked = false;
 var SFX_FNS = ['engineStart','engineSet','engineStop','scratch','wind','go','crash','fall','star','win','boost','spring','trick','click','hover'];
 var baseMusicStart = A.musicStart, baseMusicStop = A.musicStop;
 function audioSetup(){
@@ -6281,7 +6281,9 @@ function audioSetup(){
   });
   A.musicStart = function(themeIdx){
     lastTheme = themeIdx | 0;
-    if (!FAM.music) return;
+    // iOS can fire engine music calls before any touch exists; latching musOn then would
+    // kill the gesture kick-start below and the game would stay silent forever
+    if (!FAM.music || !unlocked) return;
     musOn = true;
     return baseMusicStart.call(A, lastTheme);
   };
@@ -6291,18 +6293,23 @@ function audioSetup(){
     FAM.music = !on; FAM.sfx = !on;
     famPersist(); syncAudioButtons();
     if (!FAM.music) A.musicStop();
-    else { A.unlock(); A.musicStart(lastTheme); }
+    else { A.unlock(); unlocked = true; A.musicStart(lastTheme); }
     return false;                            // the engine's own mute stays off
   };
-  // the engine only starts music inside loadLevel; the boot level loaded silent, so give
-  // the first real user gesture a nudge
+  // the engine only starts music inside loadLevel; the boot level loaded silent, so the
+  // first real user gesture (a trusted event, which iOS requires) kick-starts it
   document.addEventListener('pointerup', function(){
-    if (FAM.music && !musOn) { A.unlock(); A.musicStart(lastTheme); }
+    if (!unlocked) { A.unlock(); unlocked = true; }
+    if (FAM.music && !musOn) A.musicStart(lastTheme);
+  }, true);
+  document.addEventListener('touchend', function(){
+    if (!unlocked) { A.unlock(); unlocked = true; }
+    if (FAM.music && !musOn) A.musicStart(lastTheme);
   }, true);
 }
 function setMusic(v){
   FAM.music = v; famPersist(); syncAudioButtons();
-  if (!v) A.musicStop(); else { A.unlock(); A.musicStart(lastTheme); }
+  if (!v) A.musicStop(); else { A.unlock(); unlocked = true; A.musicStart(lastTheme); }
 }
 function setSfx(v){ FAM.sfx = v; famPersist(); syncAudioButtons(); }
 var btnMus = null, btnFx = null;
