@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src data:; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -6270,11 +6270,26 @@ applyMode();
 
 /* ================= audio: music ON by default here, split music/SFX toggles ================= */
 var A = window.AUDIO3;
+var SILENT_WAV = 'data:audio/wav;base64,UklGRuQSAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YcASAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=';
 var lastTheme = 0, musOn = false, unlocked = false;
 var SFX_FNS = ['engineStart','engineSet','engineStop','scratch','wind','go','crash','fall','star','win','boost','spring','trick','click','hover'];
 var baseMusicStart = A.musicStart, baseMusicStop = A.musicStop;
 function audioSetup(){
   if (A.muted) A.toggleMute();               // the base game boots muted; this edition sings
+  // the module keeps its context private; catch it on creation so the readout can report it
+  var AC = window.AudioContext || window.webkitAudioContext;
+  if (AC) {
+    var Wrapped = function(){
+      var c = new AC();
+      A.__ctx = c;
+      try { c.onstatechange = updateDiag; } catch(e){}
+      return c;
+    };
+    Wrapped.prototype = AC.prototype;
+    window.AudioContext = Wrapped;
+    if (window.webkitAudioContext) window.webkitAudioContext = Wrapped;
+  }
+  setInterval(updateDiag, 1000);
   SFX_FNS.forEach(function(k){
     var base = A[k];
     if (typeof base !== 'function') return;
@@ -6297,10 +6312,27 @@ function audioSetup(){
     else { A.unlock(); unlocked = true; A.musicStart(lastTheme); }
     return false;                            // the engine's own mute stays off
   };
-  // the engine only starts music inside loadLevel; the boot level loaded silent, so the
-  // first real user gesture (a trusted event, which iOS requires) kick-starts it
+  // iOS routes WebAudio through the ringer channel, so the side switch silences the game.
+  // Playing a real HTML media element moves Safari into the playback session, which ignores
+  // the switch. It must contain actual samples — a zero-length clip never starts.
+  var session = null;
+  function playbackSession(){
+    if (session || !(FAM.music || FAM.sfx)) return;
+    try {
+      session = document.createElement('audio');
+      session.setAttribute('playsinline', '');
+      session.loop = true;
+      session.volume = 0.005;
+      session.src = SILENT_WAV;
+      var p = session.play();
+      if (p && p['catch']) p['catch'](function(){ session = null; });
+    } catch(e){ session = null; }
+  }
+  // the engine only starts music inside loadLevel; the boot level loaded silent, so every
+  // user gesture (a trusted event, which iOS requires) re-attempts the start until it sticks
   function gestureKick(){
     if (!unlocked) { A.unlock(); unlocked = true; }
+    playbackSession();
     if (FAM.music && !musOn) A.musicStart(lastTheme);
   }
   document.addEventListener('pointerup', gestureKick, true);
@@ -6315,11 +6347,54 @@ function setSfx(v){
   FAM.sfx = v; famPersist(); syncAudioButtons();
   announce(v ? 'sound effects on' : 'sound effects off');
 }
-var btnMus = null, btnFx = null;
+var btnMus = null, btnFx = null, bigBtn = null, diag = null;
 function syncAudioButtons(){
   // spell the state out — cryptic icons let a player switch their own sound off by accident
   if (btnMus) { btnMus.textContent = FAM.music ? '♪ ON' : '♪ OFF'; btnMus.classList.toggle('off', !FAM.music); }
   if (btnFx) { btnFx.textContent = FAM.sfx ? 'FX ON' : 'FX OFF'; btnFx.classList.toggle('off', !FAM.sfx); }
+  if (bigBtn) {
+    var on = FAM.music || FAM.sfx;
+    bigBtn.textContent = on ? '🔊 SOUND IS ON — TAP TO MUTE' : '🔈 SOUND IS OFF — TAP FOR SOUND';
+    bigBtn.classList.toggle('off', !on);
+  }
+  updateDiag();
+}
+// a plain-English readout, so a silent phone can say what it is actually doing
+function updateDiag(){
+  if (!diag) return;
+  var st = 'no audio yet';
+  try {
+    if (A.__ctx) st = A.__ctx.state;
+    else if (unlocked) st = 'starting';
+  } catch(e){ st = 'blocked'; }
+  diag.textContent = 'music ' + (FAM.music ? 'on' : 'off') +
+                     ' · effects ' + (FAM.sfx ? 'on' : 'off') +
+                     ' · audio ' + st + (musOn ? ' · playing' : '');
+}
+/* The app sets touch-action:none and preventDefaults every pointer event, so iOS Safari
+ * never synthesises a click — a click listener here is dead on a phone while still firing
+ * under a desktop mouse. Bind presses the same way the game binds its own buttons. */
+function tap(node, fn){
+  var down = null, handled = 0;
+  node.addEventListener('pointerdown', function(e){
+    down = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    e.stopPropagation();
+  });
+  node.addEventListener('pointerup', function(e){
+    if (!down || e.pointerId !== down.id) return;
+    var moved = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y) > 12;
+    down = null;
+    if (moved) return;                       // a drag across the button is a drawing stroke
+    e.preventDefault(); e.stopPropagation();
+    handled = Date.now();
+    fn(e);
+  });
+  node.addEventListener('pointercancel', function(){ down = null; });
+  node.addEventListener('click', function(e){          // keyboards and mice still click
+    if (Date.now() - handled < 700) return;            // pointerup already ran this
+    e.preventDefault(); e.stopPropagation();
+    fn(e);
+  });
 }
 function announce(msg){
   var t = document.getElementById('toast');
@@ -6494,7 +6569,7 @@ function buildPanel(){
   totLine.id = 'famTot';
   modeBtn = document.createElement('button');
   modeBtn.id = 'famMode';
-  modeBtn.addEventListener('click', function(){
+  tap(modeBtn, function(){
     FAM.mode = (FAM.mode === 'easy') ? 'hard' : 'easy';
     applyMode(); famPersist(); renderPanel();
   });
@@ -6562,7 +6637,8 @@ function buildFinale(){
   card.appendChild(entry); card.appendChild(finRows); card.appendChild(close);
   fin.appendChild(card);
   app.appendChild(fin);
-  saveBtn.addEventListener('click', function(){
+  tap(nameBox, function(){ try { nameBox.focus(); } catch(e){} });   // preventDefault blocks focus otherwise
+  tap(saveBtn, function(){
     var s = totalScore();
     FAM.board.push({ n: cleanName(nameBox.value), s: s });
     FAM.board.sort(function(a, b){ return b.s - a.s; });
@@ -6570,7 +6646,7 @@ function buildFinale(){
     famPersist(); renderPanel(); renderFinRows(s);
     entry.style.display = 'none';
   });
-  close.addEventListener('click', hideFinale);
+  tap(close, hideFinale);
   var win = document.getElementById('winCard');
   if (win && window.MutationObserver) {
     new MutationObserver(function(){
@@ -6655,6 +6731,10 @@ function dress(){
     'body.fam-beau #starrow span::before{content:"🍇"!important}' +
     '#btnMute{display:none!important}' +
     '#btnFamMusic.off,#btnFamSfx.off{opacity:.4;text-decoration:line-through}' +
+    '#famBigSound{margin-top:12px;font:900 15px system-ui;padding:14px 20px;border-radius:14px;' +
+      'border:0;background:#ffd23f;color:#3a2a00;max-width:90vw}' +
+    '#famBigSound.off{background:#2b3b52;color:#dfe6f5}' +
+    '#famDiag{margin-top:7px;font:700 11px system-ui;opacity:.6;letter-spacing:.4px}' +
     '#famPanel{margin-top:10px;width:min(92vw,560px);background:rgba(10,18,30,.55);border:1px solid rgba(120,180,255,.18);' +
       'border-radius:14px;padding:10px 14px;font:700 13px system-ui;color:#dfe6f5}' +
     '#famPanel .famh{font:900 14px system-ui;letter-spacing:1px;margin-bottom:6px;color:#ffd76a}' +
@@ -6664,7 +6744,10 @@ function dress(){
     '#famTot{margin-top:6px;opacity:.75;font-weight:600}' +
     '#famMode{margin-top:8px;width:100%;font:800 13px system-ui;padding:9px 12px;border-radius:10px;' +
       'background:#1b2c44;color:#cfe6ff;border:1px solid rgba(120,180,255,.25)}' +
-    '#btnFamMusic,#btnFamSfx{font:800 12px system-ui;letter-spacing:.5px;padding:10px 12px}' +
+    // the topbar is a flex row: without an explicit basis these collapse to 0x0 on a phone
+    // (fine in a wide desktop window, untappable on an iPhone — measure, never assume)
+    '#btnFamMusic,#btnFamSfx{font:800 11px system-ui;letter-spacing:.3px;padding:9px 8px;' +
+      'flex:0 0 auto;min-width:52px;min-height:34px;white-space:nowrap;overflow:visible}' +
     '#famFinale{position:absolute;inset:0;display:none;z-index:80;background:rgba(4,8,16,.86)}' +
     '#famFinale.show{display:flex;align-items:center;justify-content:center}' +
     '#famFinale canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}' +
@@ -6688,6 +6771,22 @@ function dress(){
   document.head.appendChild(st);
 
   // topbar: hide the master mute, add music + FX toggles
+  // big, unmissable control on the title screen — the topbar toggles are small on a phone
+  var title = document.getElementById('title');
+  if (title) {
+    bigBtn = document.createElement('button');
+    bigBtn.id = 'famBigSound';
+    diag = document.createElement('div');
+    diag.id = 'famDiag';
+    var tot = document.getElementById('totstars');
+    if (tot && tot.parentNode === title) { title.insertBefore(bigBtn, tot); title.insertBefore(diag, tot); }
+    else { title.appendChild(bigBtn); title.appendChild(diag); }
+    tap(bigBtn, function(){
+      var on = !(FAM.music || FAM.sfx);
+      setSfx(on); setMusic(on);
+    });
+  }
+
   var mute = document.getElementById('btnMute');
   if (mute && mute.parentNode) {
     btnMus = document.createElement('button');
@@ -6696,8 +6795,8 @@ function dress(){
     btnFx.id = 'btnFamSfx';
     mute.parentNode.insertBefore(btnMus, mute);
     mute.parentNode.insertBefore(btnFx, mute);
-    btnMus.addEventListener('click', function(){ setMusic(!FAM.music); });
-    btnFx.addEventListener('click', function(){ setSfx(!FAM.sfx); });
+    tap(btnMus, function(){ setMusic(!FAM.music); });
+    tap(btnFx, function(){ setSfx(!FAM.sfx); });
     syncAudioButtons();
   }
 
