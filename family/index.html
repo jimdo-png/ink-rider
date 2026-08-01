@@ -4367,7 +4367,7 @@ window.QUIPS3.steep.push('Peak too proud.');
     var c = MUS[musTheme], sc = c.scale, n = sc.length;
     var d = BAR[Math.floor(step / 8) % 4] + SEQ[step % 8];
     var f = c.root * Math.pow(2, Math.floor(d / n) + sc[d % n] / 12);
-    mVoice(c.w, f, t, mus.dt * 2.1, 0.24 * ((step % 8) === 0 ? 1.5 : 1), 0.02);
+    mVoice(c.w, f, t, mus.dt * 2.1, 0.40 * ((step % 8) === 0 ? 1.5 : 1), 0.02);
     if (step % 16 === 0) {                                  // slow breathing pad
       mVoice('sine', c.root * 0.5, t, mus.dt * 14, 0.2, mus.dt * 4);
       mVoice('sine', c.root * 0.752, t, mus.dt * 14, 0.12, mus.dt * 5);
@@ -4407,7 +4407,7 @@ window.QUIPS3.steep.push('Peak too proud.');
     mFilt.frequency.setValueAtTime(c.cut, t);
     mBus.gain.cancelScheduledValues(t);
     mBus.gain.setValueAtTime(0.0001, t);
-    mBus.gain.linearRampToValueAtTime(0.20, t + 1.2);       // fade in, never a click
+    mBus.gain.linearRampToValueAtTime(0.55, t + 1.2);       // fade in, never a click
     mus = { dt: 30 / c.bpm, next: t + 0.08, step: 0, v: [], timer: 0 };
     mTick();
     mus.timer = setInterval(mTick, 200);
@@ -6208,16 +6208,14 @@ for (hk in B64) {
 }
 
 /* ================= family save (separate key, defensively parsed) ================= */
-var AUDIO_V = 2;                             // bump to force sound back on for everyone
-var FAM = { v: AUDIO_V, music: true, sfx: true, mode: 'easy', board: [] };
+// sound starts OFF: the player turns music and effects on when they want them
+var FAM = { music: false, sfx: false, mode: 'easy', board: [] };
 function famLoad(){
   var raw;
   try { raw = JSON.parse(localStorage.getItem('inkrider3fam')); } catch(e){ return; }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
-  // anyone who got stuck with both toggles off gets sound back once, on this version bump
-  var fresh = ((raw.v | 0) < AUDIO_V);
-  FAM.music = (!fresh && raw.music === false) ? false : true;
-  FAM.sfx = (!fresh && raw.sfx === false) ? false : true;
+  FAM.music = (raw.music === true);
+  FAM.sfx = (raw.sfx === true);
   FAM.mode = (raw.mode === 'hard') ? 'hard' : 'easy';
   FAM.board = [];
   if (Array.isArray(raw.board)) {
@@ -6230,7 +6228,6 @@ function famLoad(){
     }
     FAM.board.sort(function(a, b){ return b.s - a.s; });
   }
-  if (fresh) famPersist();                   // settle the reset so it only happens once
 }
 function famPersist(){
   try { localStorage.setItem('inkrider3fam', JSON.stringify(FAM)); } catch(e){}
@@ -6318,13 +6315,11 @@ function setSfx(v){
   FAM.sfx = v; famPersist(); syncAudioButtons();
   announce(v ? 'sound effects on' : 'sound effects off');
 }
-var btnMus = null, btnFx = null, soundBtn = null;
+var btnMus = null, btnFx = null;
 function syncAudioButtons(){
   // spell the state out — cryptic icons let a player switch their own sound off by accident
   if (btnMus) { btnMus.textContent = FAM.music ? '♪ ON' : '♪ OFF'; btnMus.classList.toggle('off', !FAM.music); }
   if (btnFx) { btnFx.textContent = FAM.sfx ? 'FX ON' : 'FX OFF'; btnFx.classList.toggle('off', !FAM.sfx); }
-  if (soundBtn) soundBtn.textContent = 'SOUND: MUSIC ' + (FAM.music ? 'ON' : 'OFF') +
-                                       ' · EFFECTS ' + (FAM.sfx ? 'ON' : 'OFF') + ' (tap to turn all on)';
 }
 function announce(msg){
   var t = document.getElementById('toast');
@@ -6503,13 +6498,8 @@ function buildPanel(){
     FAM.mode = (FAM.mode === 'easy') ? 'hard' : 'easy';
     applyMode(); famPersist(); renderPanel();
   });
-  soundBtn = document.createElement('button');
-  soundBtn.id = 'famSound';
-  soundBtn.addEventListener('click', function(){
-    setMusic(true); setSfx(true);            // one obvious way back to full sound
-  });
   panel.appendChild(h); panel.appendChild(rowsBox); panel.appendChild(totLine);
-  panel.appendChild(modeBtn); panel.appendChild(soundBtn);
+  panel.appendChild(modeBtn);
   sel.appendChild(panel);
   var grid = document.getElementById('grid');
   if (grid && window.MutationObserver) {
@@ -6672,9 +6662,8 @@ function dress(){
     '.famrow.dim{opacity:.55}.famrow.hot b{color:#ffd76a}' +
     '.famrow b{font-variant-numeric:tabular-nums}' +
     '#famTot{margin-top:6px;opacity:.75;font-weight:600}' +
-    '#famMode,#famSound{margin-top:8px;width:100%;font:800 13px system-ui;padding:9px 12px;border-radius:10px;' +
+    '#famMode{margin-top:8px;width:100%;font:800 13px system-ui;padding:9px 12px;border-radius:10px;' +
       'background:#1b2c44;color:#cfe6ff;border:1px solid rgba(120,180,255,.25)}' +
-    '#famSound{font-size:12px}' +
     '#btnFamMusic,#btnFamSfx{font:800 12px system-ui;letter-spacing:.5px;padding:10px 12px}' +
     '#famFinale{position:absolute;inset:0;display:none;z-index:80;background:rgba(4,8,16,.86)}' +
     '#famFinale.show{display:flex;align-items:center;justify-content:center}' +
