@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src data:; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -6208,13 +6208,16 @@ for (hk in B64) {
 }
 
 /* ================= family save (separate key, defensively parsed) ================= */
-var FAM = { music: true, sfx: true, mode: 'easy', board: [] };
+var AUDIO_V = 2;                             // bump to force sound back on for everyone
+var FAM = { v: AUDIO_V, music: true, sfx: true, mode: 'easy', board: [] };
 function famLoad(){
   var raw;
   try { raw = JSON.parse(localStorage.getItem('inkrider3fam')); } catch(e){ return; }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
-  FAM.music = (raw.music === false) ? false : true;
-  FAM.sfx = (raw.sfx === false) ? false : true;
+  // anyone who got stuck with both toggles off gets sound back once, on this version bump
+  var fresh = ((raw.v | 0) < AUDIO_V);
+  FAM.music = (!fresh && raw.music === false) ? false : true;
+  FAM.sfx = (!fresh && raw.sfx === false) ? false : true;
   FAM.mode = (raw.mode === 'hard') ? 'hard' : 'easy';
   FAM.board = [];
   if (Array.isArray(raw.board)) {
@@ -6227,6 +6230,7 @@ function famLoad(){
     }
     FAM.board.sort(function(a, b){ return b.s - a.s; });
   }
+  if (fresh) famPersist();                   // settle the reset so it only happens once
 }
 function famPersist(){
   try { localStorage.setItem('inkrider3fam', JSON.stringify(FAM)); } catch(e){}
@@ -6296,26 +6300,9 @@ function audioSetup(){
     else { A.unlock(); unlocked = true; A.musicStart(lastTheme); }
     return false;                            // the engine's own mute stays off
   };
-  // iOS ties WebAudio to the ringer channel, so the side switch on silent kills the whole
-  // game's sound. Playing any HTML media element flips Safari into the playback session,
-  // which ignores the switch — one looping silent wav does it for the life of the page.
-  var mediaKick = null;
-  function playbackSession(){
-    if (mediaKick) return;
-    try {
-      mediaKick = document.createElement('audio');
-      mediaKick.setAttribute('playsinline', '');
-      mediaKick.loop = true;
-      mediaKick.volume = 0.01;
-      mediaKick.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
-      var p = mediaKick.play();
-      if (p && p['catch']) p['catch'](function(){ mediaKick = null; });
-    } catch(e){ mediaKick = null; }
-  }
   // the engine only starts music inside loadLevel; the boot level loaded silent, so the
   // first real user gesture (a trusted event, which iOS requires) kick-starts it
   function gestureKick(){
-    playbackSession();
     if (!unlocked) { A.unlock(); unlocked = true; }
     if (FAM.music && !musOn) A.musicStart(lastTheme);
   }
@@ -6324,13 +6311,27 @@ function audioSetup(){
 }
 function setMusic(v){
   FAM.music = v; famPersist(); syncAudioButtons();
+  announce(v ? 'music on' : 'music off');
   if (!v) A.musicStop(); else { A.unlock(); unlocked = true; A.musicStart(lastTheme); }
 }
-function setSfx(v){ FAM.sfx = v; famPersist(); syncAudioButtons(); }
-var btnMus = null, btnFx = null;
+function setSfx(v){
+  FAM.sfx = v; famPersist(); syncAudioButtons();
+  announce(v ? 'sound effects on' : 'sound effects off');
+}
+var btnMus = null, btnFx = null, soundBtn = null;
 function syncAudioButtons(){
-  if (btnMus) { btnMus.textContent = '♪'; btnMus.classList.toggle('off', !FAM.music); }
-  if (btnFx) { btnFx.textContent = 'FX'; btnFx.classList.toggle('off', !FAM.sfx); }
+  // spell the state out — cryptic icons let a player switch their own sound off by accident
+  if (btnMus) { btnMus.textContent = FAM.music ? '♪ ON' : '♪ OFF'; btnMus.classList.toggle('off', !FAM.music); }
+  if (btnFx) { btnFx.textContent = FAM.sfx ? 'FX ON' : 'FX OFF'; btnFx.classList.toggle('off', !FAM.sfx); }
+  if (soundBtn) soundBtn.textContent = 'SOUND: MUSIC ' + (FAM.music ? 'ON' : 'OFF') +
+                                       ' · EFFECTS ' + (FAM.sfx ? 'ON' : 'OFF') + ' (tap to turn all on)';
+}
+function announce(msg){
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(announce._to);
+  announce._to = setTimeout(function(){ t.classList.remove('show'); }, 1400);
 }
 
 /* ================= the rider head, following every pose ================= */
@@ -6502,7 +6503,13 @@ function buildPanel(){
     FAM.mode = (FAM.mode === 'easy') ? 'hard' : 'easy';
     applyMode(); famPersist(); renderPanel();
   });
-  panel.appendChild(h); panel.appendChild(rowsBox); panel.appendChild(totLine); panel.appendChild(modeBtn);
+  soundBtn = document.createElement('button');
+  soundBtn.id = 'famSound';
+  soundBtn.addEventListener('click', function(){
+    setMusic(true); setSfx(true);            // one obvious way back to full sound
+  });
+  panel.appendChild(h); panel.appendChild(rowsBox); panel.appendChild(totLine);
+  panel.appendChild(modeBtn); panel.appendChild(soundBtn);
   sel.appendChild(panel);
   var grid = document.getElementById('grid');
   if (grid && window.MutationObserver) {
@@ -6657,8 +6664,7 @@ function dress(){
   st.textContent =
     'body.fam-beau #starrow span::before{content:"🍇"!important}' +
     '#btnMute{display:none!important}' +
-    '#btnFamMusic.off,#btnFamSfx.off{opacity:.35}' +
-    '#btnFamSfx{font-size:13px;letter-spacing:.5px}' +
+    '#btnFamMusic.off,#btnFamSfx.off{opacity:.4;text-decoration:line-through}' +
     '#famPanel{margin-top:10px;width:min(92vw,560px);background:rgba(10,18,30,.55);border:1px solid rgba(120,180,255,.18);' +
       'border-radius:14px;padding:10px 14px;font:700 13px system-ui;color:#dfe6f5}' +
     '#famPanel .famh{font:900 14px system-ui;letter-spacing:1px;margin-bottom:6px;color:#ffd76a}' +
@@ -6666,8 +6672,10 @@ function dress(){
     '.famrow.dim{opacity:.55}.famrow.hot b{color:#ffd76a}' +
     '.famrow b{font-variant-numeric:tabular-nums}' +
     '#famTot{margin-top:6px;opacity:.75;font-weight:600}' +
-    '#famMode{margin-top:8px;width:100%;font:800 13px system-ui;padding:9px 12px;border-radius:10px;' +
+    '#famMode,#famSound{margin-top:8px;width:100%;font:800 13px system-ui;padding:9px 12px;border-radius:10px;' +
       'background:#1b2c44;color:#cfe6ff;border:1px solid rgba(120,180,255,.25)}' +
+    '#famSound{font-size:12px}' +
+    '#btnFamMusic,#btnFamSfx{font:800 12px system-ui;letter-spacing:.5px;padding:10px 12px}' +
     '#famFinale{position:absolute;inset:0;display:none;z-index:80;background:rgba(4,8,16,.86)}' +
     '#famFinale.show{display:flex;align-items:center;justify-content:center}' +
     '#famFinale canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}' +
